@@ -1,10 +1,28 @@
 ###############################################################################################
-# timothy.clark@ge.com, 11/12/2021
+# timothy.clark@ge.com, 12/17/2021
 # This script runs the Cobra Commander 006N8537 via Phidgets and two Varedan LA-310T-GE
-
+#
 # This script was written with:
 #   Phidget22 - Version 1.8 - Built Dec 2 2021 16:16:49, 1.8.20211202
 #   Python version 3.9.5
+#
+# This script is compatible with Cobra Commander Main PCB, 006N7093, revisions 0 and 1.
+#
+#   Applicable Documents for Cobra Commander/Camera:
+#   -------------------------------------------------------
+#       DOC-0014-1035 Cobra Commander Software Files
+#       DOC-0014-1037 Cobra Commander Configuration Files
+#
+#       006N8537 – Top Level Assembly for Cobra Commander
+#       006N8577 – Cobra Commander Enclosure
+#       006N7093 – Cobra Commander Main PCB
+#           Build Instructions: DOC-0014-1080
+#       006N8228 – Connection Cables within Cobra Commander
+#
+#       006N7722 – Cobra Camera PCB (Inside Cobra Camera)
+#           Build Instructions: DOC – 0014-0904
+#
+
 
 from Cobra_Commander_GUI import Ui_MainWindow
 from Dialog_Rumble_Current import Ui_Dialog
@@ -61,6 +79,7 @@ class GamepadInput(EventHandler, qtc.QObject):
         self.lightState = 0  # 0: Light Mode Off, 1: Light Vector Mode, 2: Light Intensity Mode
         self.lightTimer = 0
         self.motionReady = False
+        self.rumbleSetting = 0
 
     def process_button_event(self, event):
         button_dict = get_button_values(get_state(0))
@@ -199,8 +218,11 @@ class GamepadInput(EventHandler, qtc.QObject):
     def rumble(self, value):
         if value:
             set_vibration(0, value, value)
+            self.rumbleSetting = value
+
         else:
             set_vibration(0, 0, 0)
+            self.rumbleSetting = 0
 
     def stop_motion(self):
         mw.Motor2A.slider.setValue(0)
@@ -282,7 +304,7 @@ class Phidget(VoltageOutput, VoltageInput, DigitalOutput, DigitalInput, Temperat
         try:
             return self.getAttached()
         except PhidgetException as e:
-            print("Exception 0A: " + str(hex(e.code)) + " " + str(self) + " " + str(time.time()))
+            print("Exception 0A, " + str(self.id) + ": " + str(hex(e.code)) + " " + str(self) + " " + str(time.time()))
             return -1
 
     def onError(self, trash, error_code, error_description):
@@ -317,7 +339,7 @@ class ToggleSwitch(Phidget):
                 self.setState(True)
                 return self.getState()
         except PhidgetException as e:
-            print("Exception 0: " + str(hex(e.code)) + " " + str(self) + " " + str(time.time()))
+            print("Exception 0, " + str(self.id) + ": " + str(hex(e.code)) + " " + str(self) + " " + str(time.time()))
             return -1
 
     def switch_on(self):
@@ -328,7 +350,7 @@ class ToggleSwitch(Phidget):
                 self.setState(True)
                 return self.getState()
         except PhidgetException as e:
-            print("Exception 1: " + str(hex(e.code)) + " " + str(self) + " " + str(time.time()))
+            print("Exception 1, " + str(self.id) + ": " + str(hex(e.code)) + " " + str(self) + " " + str(time.time()))
             return -1
 
     def switch_off(self):
@@ -339,17 +361,18 @@ class ToggleSwitch(Phidget):
                 self.setState(False)
                 return self.getState()
         except PhidgetException as e:
-            print("Exception 2: " + str(hex(e.code)) + " " + str(self) + " " + str(time.time()))
+            print("Exception 2, " + str(self.id) + ": " + str(hex(e.code)) + " " + str(self) + " " + str(time.time()))
             return -1
 
     def grabState(self):
         try:
             return self.getState()
         except PhidgetException as e:
-            print("Exception 3: " + str(hex(e.code)) + " " + str(self) + " " + str(time.time()))
+            print("Exception 3, " + str(self.id) + ": " + str(hex(e.code)) + " " + str(self) + " " + str(time.time()))
             return -1
 
 
+# Class for measuring motor current
 class CurrentFeedback(Phidget):
     trans_con = 0.25  # A/V transconductance
     high_current_warning = 0.2
@@ -407,6 +430,7 @@ class CurrentFeedback(Phidget):
                 self.rumble_value = 0
 
 
+# Class for Voltage Output phidget which can control motor speed and LED intensity
 class VariableVoltageSource(Phidget):
     def __init__(self, phidget_type, sn, hub_port, ch):
         super(VariableVoltageSource, self).__init__(phidget_type, sn, hub_port, ch)
@@ -415,12 +439,11 @@ class VariableVoltageSource(Phidget):
         try:
             self.setVoltage(value)
         except PhidgetException as e:
-            print("Exception 4: " + str(hex(e.code)) + " " + str(self) + " " + str(time.time()))
+            print("Exception 4, " + str(self.id) + ": " + str(hex(e.code)) + " " + str(self) + " " + str(time.time()))
 
 
+# Class for sensing faults on Varedan
 class FaultSense(Phidget, qtc.QObject):
-    fault1_occurred = qtc.pyqtSignal()
-    fault2_occurred = qtc.pyqtSignal()
 
     def __init__(self, phidget_type, sn, hub_port, ch, button: qtw.QPushButton):
         Phidget.__init__(self, phidget_type, sn, hub_port, ch, self.onStateChange)
@@ -431,21 +454,15 @@ class FaultSense(Phidget, qtc.QObject):
     # state == True when there is a fault
     def onStateChange(self, trash, state):
         if state == 1:
-            fault = self.button.text()
-            if fault == "Drive #1 Fault Status":
-                self.fault1_occurred.emit()  # TODO is this needed
-            elif fault == "Drive #2 Fault Status":
-                self.fault2_occurred.emit()  # TODO is this needed
-
             self.button.setStyleSheet("background-color : red")
             self.isFault = True
 
         elif state == 0:
             self.button.setStyleSheet("background-color : light grey")
             self.isFault = False
-            # self.button.update()
 
 
+# Class to change temperature label to solid red or blinking red with input from Thermocouple Phidget
 class Thermometer(Phidget, qtc.QObject):
     high_temp_warning = qtc.pyqtSignal()
 
@@ -468,7 +485,7 @@ class Thermometer(Phidget, qtc.QObject):
             self.label.setStyleSheet("background-color : light grey")
 
 
-# Combine VoltageOutput Phidget with GUI slider and jog buttons
+# Combine VoltageOutput Phidget with GUI slider and jog buttons. This is for the Pan and Tilt motor axes.
 class IndependentMotor():
     def __init__(self, vvs, slider: qtw.QSlider, jog_pos: qtw.QPushButton, jog_neg: qtw.QPushButton):
         self.buttonJogPositive = jog_pos
@@ -517,7 +534,8 @@ class IndependentMotor():
         self.cmdVoltage(self.slider.value())
 
 
-# One slider controls both motors for one type of movement, second slider controls both for second type of movement
+# Combine buttons and sliders to control two shoulder motors. One slider controls both motors for extend movement,
+# second slider controls shoulder rotational movement.
 class Shoulder:
     def __init__(self, extend: qtw.QPushButton, retract: qtw.QPushButton, cw: qtw.QPushButton, ccw: qtw.QPushButton,
                  slider_er: qtw.QSlider, slider_rot: qtw.QSlider, channel_side: VariableVoltageSource,
@@ -543,6 +561,7 @@ class Shoulder:
         self.retractButton.setStyleSheet("QPushButton:pressed{background-color: green}")
         self.cwButton.setStyleSheet("QPushButton:pressed{background-color: green}")
         self.ccwButton.setStyleSheet("QPushButton:pressed{background-color: green}")
+        self.init = False
 
     def extend(self):
         voltage = self.sliderExtendRetract.value() / 10
@@ -565,9 +584,14 @@ class Shoulder:
         self.channelSideMtr.voltageSet(voltage)
 
     def stop_motion(self):
-        self.channelSideMtr.voltageSet(0)
-        self.nonChannelMtr.voltageSet(0)
+        if self.init:
+            self.channelSideMtr.voltageSet(0)
+            self.nonChannelMtr.voltageSet(0)
+        else:
+            self.init = True
 
+    # Method called by GamepadInput which calculates motor speeds for multi-axis movement of extend and rotation of
+    # shoulder
     def multi_axis(self, x, y):
 
         # Check for boundary position movements of joystick
@@ -713,6 +737,7 @@ class CameraLighting:
             i.updateLED()
 
     def resetLEDs(self):
+        self.maxBrightness.setValue(self.maxBrightness.minimum())
         for i in self.LEDs:
             i.resetBrightness()
 
@@ -851,6 +876,7 @@ class SimpleButton:
             self.button.setStyleSheet("background-color : red")
 
 
+# Class for button which applies important sequencing of power to Varedan to prevent motor runaway
 class EnableMotorsButton:
 
     def __init__(self, button, sw_bus: ToggleSwitch, sw_amp_e: ToggleSwitch, sw_logic: ToggleSwitch):
@@ -1126,12 +1152,14 @@ class ConfigurationManager:
             print("Created directory for configuration files in folder:", os.getcwd())
             os.mkdir("./" + self.configDir)
             config_files = os.listdir(self.configDir)
+            # Open window for user to drop in config files
             os.startfile(os.getcwd() + "/" + self.configDir)
             msg = qtw.QMessageBox()
             msg.setIcon(qtw.QMessageBox.Information)
             msg.setWindowTitle("Information")
             msg.setText(
-                "Copy cobra camera configuration files to the location:\n(see window that just opened)\n\n" + os.getcwd() + "\\" + self.configDir.split("./")[1].split("/")[0])
+                "Copy cobra camera configuration files to the location:\n(see window that just opened)\n\n" + os.getcwd() + "\\" +
+                self.configDir.split("./")[1].split("/")[0])
             msg.exec_()
 
         for i in config_files:
@@ -1237,7 +1265,7 @@ class DialogWindowAlertCurrent(qtw.QDialog, Ui_Dialog):
         self.submitted.emit(float(self.e_current.text()))
 
 
-# Subclass from information created from Qt Designer
+# Pull in GUI information and pair with code.
 class UserWindow(qtw.QMainWindow, Ui_MainWindow):
     count = 0
 
@@ -1248,7 +1276,7 @@ class UserWindow(qtw.QMainWindow, Ui_MainWindow):
         # Manage the selection options in the serial number combo box
         self.CM = ConfigurationManager(self.serialNumberSelect3)
 
-        # Initialize Switches
+        # Initialize Switches (Phidget Channel Qty: 11)
         self.swBus = ToggleSwitch("DigitalOutput", "HUB2", 1, 3)
         self.swEnable = ToggleSwitch("DigitalOutput", "HUB2", 0, 1)
         self.swStatusLED = ToggleSwitch("DigitalOutput", "HUB2", 0, 3)
@@ -1259,7 +1287,6 @@ class UserWindow(qtw.QMainWindow, Ui_MainWindow):
         self.swCameraTele = ToggleSwitch("DigitalOutput", "HUB4", 1, 0)
         self.swCameraMS = ToggleSwitch("DigitalOutput", "HUB2", 1, 2)
         self.swEnableLEDs = ToggleSwitch("DigitalOutput", "HUB2", 0, 2)
-
         self.swLogic = ToggleSwitch("DigitalOutput", "HUB2", 0, 0)
 
         # Initialize Simple Buttons
@@ -1270,7 +1297,8 @@ class UserWindow(qtw.QMainWindow, Ui_MainWindow):
         self.CameraTele = SimpleButton(self.b_tele, self.swCameraTele)
         self.CameraMS = SimpleButton(self.b_manualSelect, self.swCameraMS)
 
-        # Initialize LED Brightness Command Voltage
+        # Initialize LED Brightness Command Voltage (Phidget Channel Qty: 4)
+
         self.NorthWestLEDcmd = VariableVoltageSource("VoltageOutput", "HUB1", 4, 0)
         self.NorthEastLEDcmd = VariableVoltageSource("VoltageOutput", "HUB1", 1, 0)
         self.SouthEastLEDcmd = VariableVoltageSource("VoltageOutput", "HUB1", 3, 0)
@@ -1287,7 +1315,7 @@ class UserWindow(qtw.QMainWindow, Ui_MainWindow):
                                            self.s_max, self.dial, self.b_setMinBrightnessLED,
                                            self.b_resetMinimumBrightnessLED, self.b_enableLEDs, self.swEnableLEDs)
 
-        # Initialize Motors Command Voltage
+        # Initialize Motors Command Voltage (Phidget Channel Qty: 4)
         self.Motor1Acmd = VariableVoltageSource("VoltageOutput", "HUB2", 4, 0)
         self.Motor1Bcmd = VariableVoltageSource("VoltageOutput", "HUB2", 3, 0)
         self.Motor2Acmd = VariableVoltageSource("VoltageOutput", "HUB3", 1, 0)
@@ -1301,12 +1329,13 @@ class UserWindow(qtw.QMainWindow, Ui_MainWindow):
                                  self.s_extend_retract, self.s_rotate, self.Motor1Bcmd, self.Motor1Acmd)
 
         # Pair Fault Sensing: Drive #1 Shoulder Motors, Drive #2 Pan/Tilt/Aux. Binary Output: Fault/No Fault
+        # (Phidget Channel Qty: 2)
         self.Drive1Fault = FaultSense("DigitalInput", "HUB1", 0, 0, self.b_drive1_fault)
         self.Drive2Fault = FaultSense("DigitalInput", "HUB1", 5, 0, self.b_drive2_fault)
         self.b_drive1_fault.pressed.connect(self.resetPressed)
         self.b_drive2_fault.pressed.connect(self.resetPressed)
 
-        # Pair Thermocouples with Label on GUI
+        # Pair Thermocouples with Label on GUI (Phidget Channel Qty: 2)
         self.TempDrive1 = Thermometer("TemperatureSensor", "HUB4", 2, 1, self.l_tempDrive1)
         self.TempDrive2 = Thermometer("TemperatureSensor", "HUB4", 2, 2, self.l_tempDrive2)
         self.TempDrive1.high_temp_warning.connect(self.temperatureWarning)
@@ -1314,10 +1343,8 @@ class UserWindow(qtw.QMainWindow, Ui_MainWindow):
 
         # Motor Enable Requires Control: Enable Amplifier, +-96V Bus Voltage,
         self.Enable = EnableMotorsButton(self.b_enable, self.swBus, self.swEnable, self.swLogic)
-        # self.Drive1Fault.fault1_occurred.connect(self.Enable.enterFailSafe)
-        # self.Drive2Fault.fault2_occurred.connect(self.Enable.enterFailSafe)
 
-        # Initialize Voltage Input Devices That Represent Motor Current
+        # Initialize Voltage Input Devices That Represent Motor Current (Phidget Channel Qty: 4)
         self.vm_1A = CurrentFeedback("VoltageInput", "HUB4", 0, 0, self.l_current1A)
         self.vm_1B = CurrentFeedback("VoltageInput", "HUB3", 5, 0, self.l_current1B)
         self.vm_2A = CurrentFeedback("VoltageInput", "HUB3", 3, 0, self.l_current2A)
@@ -1329,12 +1356,17 @@ class UserWindow(qtw.QMainWindow, Ui_MainWindow):
         self.heartbeat.start(1000)
         self.b_heartBeat.pressed.connect(self.myocardial_infarction)
         self.b_heartBeat.released.connect(self.defibrillation)
-        self.b_heartBeat.setStyleSheet("QPushButton:pressed{background-color: green}")
         self.offline = True
 
+        # Code for Menu Options
         self.alertSettings = DialogWindowAlertCurrent()
         self.actionOpen_Alert_Current.triggered.connect(self.alertSettings.show)
         self.alertSettings.submitted.connect(self.updateCurrentWarning)
+        self.actionAdd_Config_Files.triggered.connect(lambda: os.startfile(os.getcwd() + "/" + self.CM.configDir))
+
+        # self.setFocus()
+        app.focusChanged.connect(self.rumbleContinuation)
+        self.setFocusPolicy(qtc.Qt.StrongFocus)  # This only works when the user clicks on the
 
     @qtc.pyqtSlot(float)
     def updateCurrentWarning(self, value):
@@ -1365,7 +1397,7 @@ class UserWindow(qtw.QMainWindow, Ui_MainWindow):
                 self.b_heartBeat.setStyleSheet("background-color : red")
 
             if self.offline:
-                text = "All " + str(Phidget.num_of_phidgets + 1) + " Phidgets Channels Attached Successfully"
+                text = "All " + str(Phidget.num_of_phidgets) + " Phidgets Channels Attached Successfully"
                 self.statusbar.showMessage(text, 5000)
                 # if self.swLogic.switch_on() == 1 and self.swBus.switch_on() == 1:
                 self.b_enable.setEnabled(True)
@@ -1385,13 +1417,18 @@ class UserWindow(qtw.QMainWindow, Ui_MainWindow):
                 self.LightControl.validateButtonColor()
             self.offline = True
 
+    # Called when user presses and holds the heartbeat button to identify Cobra Commander
     def myocardial_infarction(self):
+        self.b_heartBeat.setStyleSheet("background-color : green")
         self.heartbeat.stop()
         self.swStatusLED.switch_on()
 
+    # Called when user releases heartbeat button
     def defibrillation(self):
+        self.b_heartBeat.setStyleSheet("background-color : light grey")
         self.heartbeat.start(1000)
 
+    # When GUI is closed, safely shutdown the hardware.
     def closeEvent(self, event):
         self.swEnable.switch_off()
         self.swBus.switch_off()
@@ -1399,6 +1436,7 @@ class UserWindow(qtw.QMainWindow, Ui_MainWindow):
         self.swLogic.switch_off()
         self.close_phidgets()
 
+    # Method to allow for GUI to open first and then attempt to connecto to Phidgets
     def open_phidgets(self):
         self.statusbar.showMessage("Opening Phidget Channels")
         for i in Phidget.instance_list:
@@ -1409,6 +1447,7 @@ class UserWindow(qtw.QMainWindow, Ui_MainWindow):
         for i in Phidget.instance_list:
             i.close()
 
+    # Method to reset Varedan fault
     def resetPressed(self):
         if self.Drive1Fault.isFault or self.Drive2Fault.isFault:
             self.swEnable.switch_off()
@@ -1418,6 +1457,11 @@ class UserWindow(qtw.QMainWindow, Ui_MainWindow):
             wait_for_reset.singleShot(1000, self.Enable.activate)
         else:
             self.statusbar.showMessage("No Fault Detected", 1000)
+
+    # When focus has changed away from the GUI rumble stops but the Gamepad input still works. When focus is returned
+    # to the window this method starts the rumble again.
+    def rumbleContinuation(self):
+        my_handler.rumble(my_handler.rumbleSetting)
 
 
 if __name__ == '__main__':

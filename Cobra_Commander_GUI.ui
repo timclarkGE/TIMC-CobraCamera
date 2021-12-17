@@ -1003,7 +1003,7 @@
          <string>Flashing green when no connection errors. Click to help identify connected controller.</string>
         </property>
         <property name="text">
-         <string>Heart Beat</string>
+         <string>Heartbeat</string>
         </property>
        </widget>
       </item>
@@ -1037,31 +1037,12 @@
     <property name="title">
      <string>Settings</string>
     </property>
-    <widget class="QMenu" name="menuCamera_2">
-     <property name="title">
-      <string>Camera</string>
-     </property>
-     <addaction name="actionOpen_Menu"/>
-     <addaction name="actionFlip_Video_Output_2"/>
-     <addaction name="actionUmbilical_Extension"/>
-    </widget>
     <addaction name="actionOpen_Alert_Current"/>
-    <addaction name="menuCamera_2"/>
+    <addaction name="actionAdd_Config_Files"/>
    </widget>
    <addaction name="menuSettings"/>
   </widget>
   <widget class="QStatusBar" name="statusbar"/>
-  <action name="actionCamera_Toggle_Flip">
-   <property name="text">
-    <string>Flip Camera Video Output</string>
-   </property>
-   <property name="statusTip">
-    <string>Automatically rotate the camera video feed by 180 degrees</string>
-   </property>
-   <property name="shortcut">
-    <string>Ctrl+F</string>
-   </property>
-  </action>
   <action name="actionOpen_Alert_Current">
    <property name="text">
     <string>High Current Warning</string>
@@ -1070,29 +1051,9 @@
     <string>Set the current in (A) for when the user is alerted for high current.</string>
    </property>
   </action>
-  <action name="actionOpen_Camera_Menu">
+  <action name="actionAdd_Config_Files">
    <property name="text">
-    <string>Open Camera Menu</string>
-   </property>
-  </action>
-  <action name="actionFlip_Video_Output">
-   <property name="text">
-    <string>Flip Video Output</string>
-   </property>
-  </action>
-  <action name="actionOpen_Menu">
-   <property name="text">
-    <string>Open Menu</string>
-   </property>
-  </action>
-  <action name="actionFlip_Video_Output_2">
-   <property name="text">
-    <string>Flip Video Output</string>
-   </property>
-  </action>
-  <action name="actionUmbilical_Extension">
-   <property name="text">
-    <string>Umbilical Extension</string>
+    <string>Add Config Files</string>
    </property>
   </action>
  </widget>
