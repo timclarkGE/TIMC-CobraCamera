@@ -55,12 +55,12 @@ Net.enableServerDiscovery(PhidgetServerType.PHIDGETSERVER_DEVICEREMOTE)
 # Enable phidget logging
 try:
     Log.enable(LogLevel.PHIDGET_LOG_VERBOSE,
-               "./Cobra_Camera_Log_Files/" + datetime.datetime.now().strftime('CobraCameraLogFile_%Y-%m-%d_%H-%M.txt'))
+               "./Cobra_Commander_Log_Files/" + datetime.datetime.now().strftime('CobraCommanderLogFile_%Y-%m-%d_%H-%M.txt'))
 except PhidgetException as e:
-    os.mkdir("./Cobra_Camera_Log_Files")
+    os.mkdir("./Cobra_Commander_Log_Files")
     print("Created directory for log files in folder:", os.getcwd())
     Log.enable(LogLevel.PHIDGET_LOG_VERBOSE,
-               "./Cobra_Camera_Log_Files/" + datetime.datetime.now().strftime('CobraCameraLogFile_%Y-%m-%d_%H-%M.txt'))
+               "./Cobra_Commander_Log_Files/" + datetime.datetime.now().strftime('CobraCommanderLogFile_%Y-%m-%d_%H-%M.txt'))
 
 
 # Class which takes input from the gamepad and calls the functions associate with each button on the GUI
@@ -1138,7 +1138,7 @@ class ConfigurationManager:
     def __init__(self, combo_box: qtw.QComboBox):
         self.comboBox = combo_box
         self.configurations = []
-        self.configDir = "./Cobra_Camera_Config_Files/"
+        self.configDir = "./Cobra_Commander_Config_Files/"
         self.activeInstanceIndex = None
         self.offlineIndex = None
         self.start()
