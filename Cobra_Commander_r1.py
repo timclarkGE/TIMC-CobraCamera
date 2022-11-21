@@ -1,12 +1,12 @@
 ###############################################################################################
-# timothy.clark@ge.com, 12/17/2021
+# timothy.clark@ge.com, 11/08/2022
 # This script runs the Cobra Commander 006N8537 via Phidgets and two Varedan LA-310T-GE
 #
 # This script was written with:
 #   Phidget22 - Version 1.8 - Built Dec 2 2021 16:16:49, 1.8.20211202
 #   Python version 3.9.5
 #
-# This script is compatible with Cobra Commander Main PCB, 006N7093, revisions 0 and 1.
+# This script is compatible with Cobra Commander Main PCB, 006N7093, only revision 2
 #
 #   Applicable Documents for Cobra Commander/Camera:
 #   -------------------------------------------------------
@@ -24,10 +24,11 @@
 #
 
 
-from Cobra_Commander_GUI import Ui_MainWindow
+from Cobra_Commander_GUIr1 import Ui_MainWindow
 from Dialog_Rumble_Current import Ui_Dialog
 from PyQt5 import QtWidgets as qtw
 from PyQt5 import QtCore as qtc
+from PyQt5 import QtGui as qtg
 
 from Phidget22.Devices.VoltageOutput import *
 from Phidget22.Devices.VoltageInput import *
@@ -43,24 +44,33 @@ import time
 import math
 import os
 import datetime
+import serial
 
-# Phidget Hub Serial Numbers, initialize with garbage
+# Phidget Hub Serial Numbers, initialize with garbage hub value
 HG = 999999
-HUB1 = HG
-HUB2 = HG - 1
-HUB3 = HG - 2
-HUB4 = HG - 3
+HUB0 = HG
+HUB1 = HG - 1
+HUB2 = HG - 2
+
+# LED default minimum brightness settings
+LG = 1000
+NW = LG
+NE = LG
+SE = LG
+SW = LG
 
 Net.enableServerDiscovery(PhidgetServerType.PHIDGETSERVER_DEVICEREMOTE)
 # Enable phidget logging
 try:
     Log.enable(LogLevel.PHIDGET_LOG_VERBOSE,
-               "./Cobra_Commander_Log_Files/" + datetime.datetime.now().strftime('CobraCommanderLogFile_%Y-%m-%d_%H-%M.txt'))
+               "./Cobra_Commander_Log_Files/" + datetime.datetime.now().strftime(
+                   'CobraCommanderLogFile_%Y-%m-%d_%H-%M.txt'))
 except PhidgetException as e:
     os.mkdir("./Cobra_Commander_Log_Files")
     print("Created directory for log files in folder:", os.getcwd())
     Log.enable(LogLevel.PHIDGET_LOG_VERBOSE,
-               "./Cobra_Commander_Log_Files/" + datetime.datetime.now().strftime('CobraCommanderLogFile_%Y-%m-%d_%H-%M.txt'))
+               "./Cobra_Commander_Log_Files/" + datetime.datetime.now().strftime(
+                   'CobraCommanderLogFile_%Y-%m-%d_%H-%M.txt'))
 
 
 # Class which takes input from the gamepad and calls the functions associate with each button on the GUI
@@ -70,11 +80,12 @@ class GamepadInput(EventHandler, qtc.QObject):
     def __init__(self, controller):
         super(GamepadInput, self).__init__(controller)
         qtc.QObject.__init__(self)
-        self.gpb_wide = GamepadButton("BACK", mw.CameraWide)
-        self.gpb_tele = GamepadButton("START", mw.CameraTele)
-        self.gpb_far = GamepadButton("RIGHT_SHOULDER", mw.CameraFar)
-        self.gpb_near = GamepadButton("LEFT_SHOULDER", mw.CameraNear)
-        self.gpb_camera = GamepadCameraButtons(self.gpb_wide, self.gpb_tele, self.gpb_far, self.gpb_near)
+        # TIMC
+        # self.gpb_wide = GamepadButton("BACK", mw.CameraWide)
+        # self.gpb_tele = GamepadButton("START", mw.CameraTele)
+        # self.gpb_far = GamepadButton("RIGHT_SHOULDER", mw.CameraFar)
+        # self.gpb_near = GamepadButton("LEFT_SHOULDER", mw.CameraNear)
+        # self.gpb_camera = GamepadCameraButtons(self.gpb_wide, self.gpb_tele, self.gpb_far, self.gpb_near)
         self.controller = controller
         self.lightState = 0  # 0: Light Mode Off, 1: Light Vector Mode, 2: Light Intensity Mode
         self.lightTimer = 0
@@ -182,7 +193,7 @@ class GamepadInput(EventHandler, qtc.QObject):
             # Left stick controls shoulder in light state 0, light throw in state 1, and max brightness in state 2
             if event.stick == LEFT:
                 if not self.lightState:
-                    mw.shoulder.multi_axis(event.x * sfactor * 0.5, event.y * sfactor * 0.5)
+                    mw.shoulder.multi_axis(event.x * sfactor, event.y * sfactor)
                 elif self.lightState == 1:
                     mw.LightControl.gamepadThrowLight(event.x, event.y)
                 elif self.lightState == 2:
@@ -311,14 +322,12 @@ class Phidget(VoltageOutput, VoltageInput, DigitalOutput, DigitalInput, Temperat
         print("Phidget Error Code:" + str(hex(error_code)))
 
     def applySerialNumber(self):
-        if self.sn == "HUB1":
+        if self.sn == "HUB0":
+            self.setDeviceSerialNumber(HUB0)
+        elif self.sn == "HUB1":
             self.setDeviceSerialNumber(HUB1)
         elif self.sn == "HUB2":
             self.setDeviceSerialNumber(HUB2)
-        elif self.sn == "HUB3":
-            self.setDeviceSerialNumber(HUB3)
-        elif self.sn == "HUB4":
-            self.setDeviceSerialNumber(HUB4)
 
 
 # Added functionality to Phidget class for toggle and latching of switch
@@ -652,13 +661,17 @@ class Shoulder:
 
 # Gets slider and VVS to control LED
 class LightEmittingDiode:
-    def __init__(self, led_cmd: VariableVoltageSource, slider: qtw.QSlider):
+    def __init__(self, led_cmd: VariableVoltageSource, slider: qtw.QSlider, id):
         self.enabled = False
         self.slider = slider  # values 1-1000
         self.LEDcmd = led_cmd
+        self.id = id
         self.slider.valueChanged.connect(self.updateLED)
-        self.sliderMaximum = self.slider.maximum()
-        self.sliderMinimum = self.slider.minimum()
+        self.max_illumination = self.slider.minimum()
+        self.sliderMaximum = self.slider.maximum()  # Absolute minimum brightness
+        self.sliderMinimum = self.slider.minimum()  # Absolute maximum brightness
+        # Set the minimum slider control value for minimum_sp brightness
+        self.minimum_sp = self.sliderMaximum
 
     def updateLED(self):
         if self.LEDcmd.isAttached():
@@ -666,29 +679,43 @@ class LightEmittingDiode:
                 self.LEDcmd.setVoltageOutputRange(VoltageOutputRange.VOLTAGE_OUTPUT_RANGE_5V)
             self.LEDcmd.voltageSet(self.slider.value() / (self.sliderMaximum / 5.0))
 
-    def setMinimumBrightness(self):
-        self.slider.setMaximum(self.slider.value())
+    def setMinimumBrightness(self, value):
+        self.slider.setMaximum(value)
+        self.minimum_sp = value
+        self.updateGlobals()
 
     def resetBrightness(self):
         self.slider.setMaximum(self.sliderMaximum)
-        self.slider.setMinimum(self.sliderMinimum)
+        self.minimum_sp = self.sliderMaximum
+        self.updateGlobals()
 
-    def setMaximumBrightness(self, value):
-        self.slider.setMinimum(value)
+    def updateGlobals(self):
+        global NW, NE, SE, SW
+        if self.id == "nw_led":
+            NW = self.minimum_sp
+        elif self.id == "ne_led":
+            NE = self.minimum_sp
+        elif self.id == "se_led":
+            SE = self.minimum_sp
+        elif self.id == "sw_led":
+            SW = self.minimum_sp
 
 
-# Takes in the four LED's the two slider bars, LED enable, set minimum_sp, and reset buttons
-class CameraLighting:
-    def __init__(self, led_nw: LightEmittingDiode, led_ne, led_se, led_sw, slider_max: qtw.QSlider,
-                 group_dial: qtw.QDial, button_min: qtw.QPushButton, button_reset: qtw.QPushButton,
-                 button_enable: qtw.QPushButton, switch: ToggleSwitch):
+# Takes in the four LED's the two slider bars, LED enable, set minimum, and reset buttons
+class CameraLighting(qtc.QObject):
+    updated_minimum_brightness = qtc.pyqtSignal(str, str, str, str)
+
+    def __init__(self, led_nw: LightEmittingDiode, led_ne, led_se, led_sw, intensity_slider: qtw.QSlider,
+                 button_min: qtw.QPushButton, button_reset: qtw.QPushButton, button_enable: qtw.QPushButton,
+                 switch: ToggleSwitch, edit_nw: qtw.QLineEdit, edit_ne: qtw.QLineEdit, edit_se: qtw.QLineEdit,
+                 edit_sw: qtw.QLineEdit, button_apply: qtw.QPushButton):
+        qtc.QObject.__init__(self)
         self.LEDs = []
         self.LEDs.append(led_nw)
         self.LEDs.append(led_ne)
         self.LEDs.append(led_se)
         self.LEDs.append(led_sw)
-        self.maxBrightness = slider_max
-        self.GroupIntensity = group_dial
+        self.GroupIntensity = intensity_slider
         self.lastGroupIntensityValue = 0
         self.onTimerUpdateGroup = qtc.QTimer()
         self.onTimerUpdateGroup.timeout.connect(
@@ -699,12 +726,38 @@ class CameraLighting:
         self.resetButton = button_reset
         self.enableButton = button_enable
         self.enableSwitch = switch
+        self.edits = []
+        self.edits.append(edit_nw)
+        self.edits.append(edit_ne)
+        self.edits.append(edit_se)
+        self.edits.append(edit_sw)
+
+        integers_only = qtg.QIntValidator()
+        integers_only.setRange(1, 999)
+        for i in range(len(self.edits)):
+            self.edits[i].setValidator(integers_only)
+        self.applyButton = button_apply
 
         self.enableButton.clicked.connect(self.toggleLEDs)
-        self.setMinButton.clicked.connect(self.updateMinimumBrightness)
+        self.setMinButton.clicked.connect(self.setMinimumBrightnessFromSlider)
         self.resetButton.clicked.connect(self.resetLEDs)
-        self.GroupIntensity.valueChanged.connect(self.dialUpdateGroupBrightness)
-        self.maxBrightness.valueChanged.connect(self.updateGroupMaxBrightness)
+        self.GroupIntensity.valueChanged.connect(self.updateGroupIntensity)
+        self.applyButton.clicked.connect(self.applyLineEditMinimumBrightness)
+
+    #
+    def initLighting(self):
+        global NW, NE, SE, SW
+        # Populate the edits with the global values determined at startup
+        self.edits[0].setText(str(NW))
+        self.edits[1].setText(str(NE))
+        self.edits[2].setText(str(SE))
+        self.edits[3].setText(str(SW))
+        self.LEDs[0].slider.setValue(NW)
+        self.LEDs[1].slider.setValue(NE)
+        self.LEDs[2].slider.setValue(SE)
+        self.LEDs[3].slider.setValue(SW)
+        self.setMinButton.click()
+        self.applyButton.click()
 
     # Toggle power to LED drivers
     def toggleLEDs(self):
@@ -726,40 +779,37 @@ class CameraLighting:
         else:
             self.enableButton.setStyleSheet("background-color : red")
 
-    def updateMinimumBrightness(self):
+    # When user clicks on "Set Minimum" the current position of the LED control sliders will be used.
+    def setMinimumBrightnessFromSlider(self):
+        count = 0
+        a = []
         for i in self.LEDs:
-            i.setMinimumBrightness()
+            value = i.slider.value()
+            i.setMinimumBrightness(value)
+            self.edits[count].setText(str(value))
             i.updateLED()
+            a.append(str(value))
+            count += 1
+        self.updated_minimum_brightness.emit(a[0], a[1], a[2], a[3])
 
-    def updateGroupMaxBrightness(self):
-        for i in self.LEDs:
-            i.setMaximumBrightness(self.maxBrightness.value())
-            i.updateLED()
+    # Invoked when user applies values found in edit boxes to set the minimum brightness for LED's
+    def applyLineEditMinimumBrightness(self):
+        for i in range(len(self.edits)):
+            self.LEDs[i].setMinimumBrightness(int(self.edits[i].text()))
 
+    # Update all LED's such that their control input slider reverts back to default values
     def resetLEDs(self):
-        self.maxBrightness.setValue(self.maxBrightness.minimum())
         for i in self.LEDs:
             i.resetBrightness()
 
-    def dialUpdateGroupBrightness(self):
-        value = self.GroupIntensity.value()
-        # Consider when dial crosses from 0 to 99, or 99 to 0
-        if abs(self.lastGroupIntensityValue - value) > 30:
-            if value < 30:
-                change = (value + 100) - self.lastGroupIntensityValue
-            elif value > 60:
-                change = value - (self.lastGroupIntensityValue + 100)
-            else:
-                change = 0
-            self.lastGroupIntensityValue = value
-        # Standard changes in dial
-        else:
-            change = value - self.lastGroupIntensityValue
-            self.lastGroupIntensityValue = value
-
+    # Update all LED's to similar percentage brightness
+    def updateGroupIntensity(self, value):
         for i in self.LEDs:
-            sv = i.slider.value()
-            i.slider.setValue(change + sv)
+            # Find the percentage of group intensity being requested by user
+            percentage = value / self.GroupIntensity.maximum()
+            # Calculate the range from maximum brightness to setting which corresponds to minimum brightness
+            span = i.minimum_sp - i.sliderMinimum
+            i.slider.setValue(int(span * percentage))
 
     # Method which is called by a timer to rotate the group dial for brightness based on gamepad input
     def gamepadUpdateGroupBrightness(self):
@@ -851,29 +901,39 @@ class SimpleToggleButton:
 
 # Pairing of a switch with a button on the GUI where button is used turn something on or turn something off, latching
 class SimpleButton:
-    def __init__(self, button, switch):
+    s = serial.Serial("COM4", '9600')
+    zoom_in = b'\x81\x01\x04\x07\x26\xFF'
+    zoom_out = b'\x81\x01\x04\x07\x36\xFF'
+    zoom_stop = b'\x81\x01\x04\x07\x00\xFF'
+    focus_toggle = b'\x81\x01\x04\x38\x10\xFF'
+    focus_far = b'\x81\x01\x04\x08\x02\xFF'
+    focus_near = b'\x81\x01\x04\x08\x03\xFF'
+    focus_stop = b'\x81\x01\x04\x08\x00\xFF'
+
+    def __init__(self, button, cmd):
         self.button = button
-        self.switch = switch
-        self.button.pressed.connect(self.activate)
-        self.button.released.connect(self.deactivate)
+        self.cmd = cmd
+        self.button.pressed.connect(self.sendStartCommand)
+        self.button.released.connect(self.sendStopCommand)
 
-    def activate(self):
-        rv = self.switch.switch_on()
-        if rv == 1:
-            self.button.setStyleSheet("background-color : green")
-        elif rv == 0:
-            self.button.setStyleSheet("background-color : light grey")
-        else:
-            self.button.setStyleSheet("background-color : red")
+    def sendStartCommand(self):
+        if self.cmd == "in":
+            data = self.zoom_in
+        elif self.cmd == "out":
+            data = self.zoom_out
+        elif self.cmd == "near":
+            data = self.focus_near
+        elif self.cmd == "far":
+            data = self.focus_far
+        elif self.cmd == "m/s":
+            data = self.focus_toggle
+        self.s.write(data)
 
-    def deactivate(self):
-        rv = self.switch.switch_off()
-        if rv == 1:
-            self.button.setStyleSheet("background-color : green")
-        elif rv == 0:
-            self.button.setStyleSheet("background-color : light grey")
-        else:
-            self.button.setStyleSheet("background-color : red")
+    def sendStopCommand(self):
+        if self.cmd == "in" or self.cmd == "out":
+            self.s.write(self.zoom_stop)
+        elif self.cmd == "near" or self.cmd == "far":
+            self.s.write(self.focus_stop)
 
 
 # Class for button which applies important sequencing of power to Varedan to prevent motor runaway
@@ -1030,13 +1090,15 @@ class GamepadCameraButtons:
             mw.CameraMS.deactivate()
 
 
-# The hub state of the controller is defined by four hub serial numbers
-class HubState:
+# The state of the controller as defined by three hub serial numbers and LED values
+class State:
     def __init__(self):
         self.hubs = []
+        self.leds = []
+        self.sn = None
         self.legitimate = False
 
-    def initializeHubs(self, hubs):
+    def initializeState(self, hubs, leds):
         error = 0
         # Only initialize once, check if empty list
         if not self.hubs:
@@ -1044,30 +1106,39 @@ class HubState:
                 self.hubs.append(i)
                 if len(str(i)) != 6:
                     error += 1
-            # Legitimize the state if all SN are 6 digits and there are four total
-            if len(hubs) == 4 and not error:
+        if not self.leds:
+            for i in leds:
+                self.leds.append(i)
+                try:
+                    value = int(i)
+                    if value > 1000 or value < 0:
+                        error += 1
+                except:
+                    # If the casting to int didn't work there was bad input
+                    error += 1
+            # Legitimize the state if all SN are 6 digits and there are three total
+            if len(hubs) == 3 and not error and len(leds) == 4:
                 self.legitimate = True
 
-    def activateHubState(self):
-        global HUB1, HUB2, HUB3, HUB4
+    def activateState(self):
+        global HUB0, HUB1, HUB2, NW, NE, SE, SW
         if self.legitimate:
-            HUB1 = self.hubs[0]
-            HUB2 = self.hubs[1]
-            HUB3 = self.hubs[2]
-            HUB4 = self.hubs[3]
+            HUB0 = self.hubs[0]
+            HUB1 = self.hubs[1]
+            HUB2 = self.hubs[2]
+            NW = self.leds[0]
+            NE = self.leds[1]
+            SE = self.leds[2]
+            SW = self.leds[3]
+
+
             return True
         else:
             return False
 
-    def getHubs(self):
-        if self.legitimate:
-            return self.hubs
-        else:
-            return None
-
 
 # Contains information about configuration files and corresponding hub state, assumes correct config file passed
-class Configuration(HubState):
+class Configuration(State):
     instance_list = []
 
     def __init__(self, file_name):
@@ -1080,21 +1151,27 @@ class Configuration(HubState):
 
     # Read in the file and set global hub variables if config file is active
     def readFile(self):
-        data = []
-        search_text = ["HUB1 = ", "HUB2 = ", "HUB3 = ", "HUB4 = "]
+        data_hubs = []
+        data_leds = []
+        search_text_hubs = ["HUB0 = ", "HUB1 = ", "HUB2 = "]
+        search_text_leds = ["NW = ", "NE = ", "SE = ", "SW = "]
         self.fileObject = open(self.fileName, "r")
         contents = self.fileObject.read()
 
         # Get hub serial numbers
-        for i in range(len(search_text)):
-            data.append(int(contents.split(search_text[i])[1].split("\n")[0]))
+        for i in range(len(search_text_hubs)):
+            data_hubs.append(int(contents.split(search_text_hubs[i])[1].split("\n")[0]))
 
-        # Send data to create HubState
-        self.initializeHubs(data)
+        # Get LED values
+        for i in range(len(search_text_leds)):
+            data_leds.append(int(contents.split(search_text_leds[i])[1].split("\n")[0]))
+
+        # Send data to create State
+        self.initializeState(data_hubs, data_leds)
 
         # Check if active file was read and activate
         if "YES" in contents:
-            if self.activateHubState():
+            if self.activateState():
                 self.isActive = True
 
         self.fileObject.close()
@@ -1102,7 +1179,7 @@ class Configuration(HubState):
     # Check if possible to make configuration active, then modify config file
     def makeConfigurationActive(self):
         if self.legitimate:
-            if self.activateHubState():
+            if self.activateState():
                 self.fileObject = open(self.fileName, "r")
                 contents = self.fileObject.read()
                 self.fileObject.close()
@@ -1114,7 +1191,7 @@ class Configuration(HubState):
                 self.isActive = True
 
     def makeConfigurationInactive(self):
-        global HG, HUB1, HUB2, HUB3, HUB4
+        global HG, HUB0, HUB1, HUB2, LG, NW, NE, SE, SW
 
         self.fileObject = open(self.fileName, "r")
         contents = self.fileObject.read()
@@ -1127,10 +1204,13 @@ class Configuration(HubState):
         self.isActive = False
 
         # Reset global HUB variables
-        HUB1 = HG
-        HUB2 = HG - 1
-        HUB3 = HG - 2
-        HUB4 = HG - 3
+        HUB0 = HG
+        HUB1 = HG - 1
+        HUB2 = HG - 2
+        NW = LG
+        NE = LG
+        SE = LG
+        SW = LG
 
 
 # Go between for Phidget control, takes in the combo box
@@ -1201,12 +1281,15 @@ class ConfigurationManager:
             f = open(full_fn)
             contents = f.read()
             if ".cc" in full_fn:
-                if "HUB1 = " in contents:
-                    if "HUB2 = " in contents:
-                        if "HUB3 = " in contents:
-                            if "HUB4 = " in contents:
-                                rv = full_fn
-                                f.close()
+                if "HUB0 = " in contents:
+                    if "HUB1 = " in contents:
+                        if "HUB2 = " in contents:
+                            if "NW = " in contents:
+                                if "NE = " in contents:
+                                    if "SE = " in contents:
+                                        if "SW = " in contents:
+                                            rv = full_fn
+                                            f.close()
         except OSError:
             print("Error opening: " + full_fn)
 
@@ -1218,6 +1301,7 @@ class ConfigurationManager:
             if self.configurations[i].fileName == instance.fileName:
                 return i
 
+    # Called when user changes configuration from the combobox
     def changeConfiguration(self):
         new_index = self.comboBox.currentIndex()
         mw.Enable.enterFailSafe()
@@ -1232,11 +1316,38 @@ class ConfigurationManager:
         for i in Phidget.instance_list:
             i.applySerialNumber()
             i.open()
+            print(i.getDeviceSerialNumber())
 
+        # After a configuration change, update the LED settings and validate the button colors
+        mw.LightControl.initLighting()
         mw.Enable.validateButtonColor()
         mw.LightControl.validateButtonColor()
+        # TIMC
         mw.CameraPWR.validateButtonColor()
 
+    # Update the configuration file with new LED settings
+    def updateConfigurationForLEDs(self, nw, ne, se, sw):
+        search_text = ["NW = ", "NE = ", "SE = ", "SW = "]
+        data = []
+        # Validate the configuration file if there is an active configuration
+        if self.offlineIndex != self.activeInstanceIndex:
+            f = open(self.configurations[self.activeInstanceIndex].fileName, "r")
+            contents = f.read()
+            f.close()
+            # Extract current LED settings
+            for i in range(len(search_text)):
+                data.append(contents.split(search_text[i])[1].split("\n")[0])
+
+            # Replace LED settings with new data
+            contents = contents.replace(search_text[0] + data[0], search_text[0] + nw)
+            contents = contents.replace(search_text[1] + data[1], search_text[1] + ne)
+            contents = contents.replace(search_text[2] + data[2], search_text[2] + se)
+            contents = contents.replace(search_text[3] + data[3], search_text[3] + sw)
+
+            # Write the new data to the configuration file
+            f = open(self.configurations[self.activeInstanceIndex].fileName, "w")
+            f.write(contents)
+            f.close()
 
 # Popup window with the ability to set the warning motor current threshold
 class DialogWindowAlertCurrent(qtw.QDialog, Ui_Dialog):
@@ -1256,7 +1367,7 @@ class DialogWindowAlertCurrent(qtw.QDialog, Ui_Dialog):
 
     def convert_current(self, value):
         max = self.s_alertCurrent.maximum()
-        min = self.s_alertCurrent.minimum_sp()
+        min = self.s_alertCurrent.minimum()
         c = DialogWindowAlertCurrent.max_current / (max - min)
         rv = round(c * int(value), 2)
         return str(rv)
@@ -1277,49 +1388,52 @@ class UserWindow(qtw.QMainWindow, Ui_MainWindow):
         self.CM = ConfigurationManager(self.serialNumberSelect3)
 
         # Initialize Switches (Phidget Channel Qty: 11)
-        self.swBus = ToggleSwitch("DigitalOutput", "HUB2", 1, 3)
-        self.swEnable = ToggleSwitch("DigitalOutput", "HUB2", 0, 1)
-        self.swStatusLED = ToggleSwitch("DigitalOutput", "HUB2", 0, 3)
-        self.swCameraPWR = ToggleSwitch("DigitalOutput", "HUB2", 1, 1)
-        self.swCameraNear = ToggleSwitch("DigitalOutput", "HUB4", 1, 3)
-        self.swCameraFar = ToggleSwitch("DigitalOutput", "HUB4", 1, 2)
-        self.swCameraWide = ToggleSwitch("DigitalOutput", "HUB4", 1, 1)
-        self.swCameraTele = ToggleSwitch("DigitalOutput", "HUB4", 1, 0)
-        self.swCameraMS = ToggleSwitch("DigitalOutput", "HUB2", 1, 2)
-        self.swEnableLEDs = ToggleSwitch("DigitalOutput", "HUB2", 0, 2)
-        self.swLogic = ToggleSwitch("DigitalOutput", "HUB2", 0, 0)
+        self.swBus = ToggleSwitch("DigitalOutput", "HUB0", 5, 3)  ##
+        self.swEnable = ToggleSwitch("DigitalOutput", "HUB0", 1, 1)  ##
+        self.swStatusLED = ToggleSwitch("DigitalOutput", "HUB0", 1, 3)  ##
+        self.swCameraPWR = ToggleSwitch("DigitalOutput", "HUB0", 5, 1)  ##
+
+        # self.swCameraNear = ToggleSwitch(None, None, None, None)##
+        # self.swCameraFar = ToggleSwitch(None, None, None, None)##
+        # self.swCameraWide = ToggleSwitch(None, None, None, None)##
+        # self.swCameraTele = ToggleSwitch(None, None, None, None)##
+        # self.swCameraMS = ToggleSwitch(None, None, None, None)##
+
+        self.swEnableLEDs = ToggleSwitch("DigitalOutput", "HUB0", 1, 2)  ##
+        self.swLogic = ToggleSwitch("DigitalOutput", "HUB0", 1, 0)  ##
 
         # Initialize Simple Buttons
         self.CameraPWR = SimpleToggleButton(self.b_cameraPower, self.swCameraPWR)
-        self.CameraNear = SimpleButton(self.b_near, self.swCameraNear)
-        self.CameraFar = SimpleButton(self.b_far, self.swCameraFar)
-        self.CameraWide = SimpleButton(self.b_wide, self.swCameraWide)
-        self.CameraTele = SimpleButton(self.b_tele, self.swCameraTele)
-        self.CameraMS = SimpleButton(self.b_manualSelect, self.swCameraMS)
+        self.CameraNear = SimpleButton(self.b_near, "near")
+        self.CameraFar = SimpleButton(self.b_far, "far")
+        self.CameraWide = SimpleButton(self.b_wide, "out")
+        self.CameraTele = SimpleButton(self.b_tele, "in")
+        self.CameraMS = SimpleButton(self.b_manualSelect, "m/s")
 
         # Initialize LED Brightness Command Voltage (Phidget Channel Qty: 4)
 
-        self.NorthWestLEDcmd = VariableVoltageSource("VoltageOutput", "HUB1", 4, 0)
-        self.NorthEastLEDcmd = VariableVoltageSource("VoltageOutput", "HUB1", 1, 0)
-        self.SouthEastLEDcmd = VariableVoltageSource("VoltageOutput", "HUB1", 3, 0)
-        self.SouthWestLEDcmd = VariableVoltageSource("VoltageOutput", "HUB1", 2, 0)
+        self.NorthWestLEDcmd = VariableVoltageSource("VoltageOutput", "HUB1", 4, 0)  ##
+        self.NorthEastLEDcmd = VariableVoltageSource("VoltageOutput", "HUB1", 1, 0)  ##
+        self.SouthEastLEDcmd = VariableVoltageSource("VoltageOutput", "HUB1", 3, 0)  ##
+        self.SouthWestLEDcmd = VariableVoltageSource("VoltageOutput", "HUB1", 2, 0)  ##
 
         # Pair LED with GUI Slider Bar
-        self.NorthWestLED = LightEmittingDiode(self.NorthWestLEDcmd, self.s_nw)
-        self.NorthEastLED = LightEmittingDiode(self.NorthEastLEDcmd, self.s_ne)
-        self.SouthEastLED = LightEmittingDiode(self.SouthEastLEDcmd, self.s_se)
-        self.SouthWestLED = LightEmittingDiode(self.SouthWestLEDcmd, self.s_sw)
+        self.NorthWestLED = LightEmittingDiode(self.NorthWestLEDcmd, self.s_nw, "nw_led")
+        self.NorthEastLED = LightEmittingDiode(self.NorthEastLEDcmd, self.s_ne, "ne_led")
+        self.SouthEastLED = LightEmittingDiode(self.SouthEastLEDcmd, self.s_se, "se_led")
+        self.SouthWestLED = LightEmittingDiode(self.SouthWestLEDcmd, self.s_sw, "sw_led")
 
         # Pair All LED Controls
         self.LightControl = CameraLighting(self.NorthWestLED, self.NorthEastLED, self.SouthEastLED, self.SouthWestLED,
-                                           self.s_max, self.dial, self.b_setMinBrightnessLED,
-                                           self.b_resetMinimumBrightnessLED, self.b_enableLEDs, self.swEnableLEDs)
-
+                                           self.s_group_intensity, self.b_setMinBrightnessLED,
+                                           self.b_resetMinimumBrightnessLED, self.b_enableLEDs, self.swEnableLEDs,
+                                           self.nw_edit, self.ne_edit, self.se_edit, self.sw_edit, self.apply_min_sp)
+        self.LightControl.updated_minimum_brightness.connect(self.CM.updateConfigurationForLEDs)
         # Initialize Motors Command Voltage (Phidget Channel Qty: 4)
-        self.Motor1Acmd = VariableVoltageSource("VoltageOutput", "HUB2", 4, 0)
-        self.Motor1Bcmd = VariableVoltageSource("VoltageOutput", "HUB2", 3, 0)
-        self.Motor2Acmd = VariableVoltageSource("VoltageOutput", "HUB3", 1, 0)
-        self.Motor2Bcmd = VariableVoltageSource("VoltageOutput", "HUB3", 0, 0)
+        self.Motor1Acmd = VariableVoltageSource("VoltageOutput", "HUB0", 2, 0)  ##
+        self.Motor1Bcmd = VariableVoltageSource("VoltageOutput", "HUB0", 3, 0)  ##
+        self.Motor2Acmd = VariableVoltageSource("VoltageOutput", "HUB2", 1, 0)  ##
+        self.Motor2Bcmd = VariableVoltageSource("VoltageOutput", "HUB2", 0, 0)  ##
         # self.Motor2Ccmd = VariableVoltageSource("VoltageOutput", HUB2, 2, 0) # Aux motor, ready for future designs
 
         # Pair GUI Slider and Buttons with Motor Command Voltage for Independent Movement of Motors
@@ -1330,14 +1444,14 @@ class UserWindow(qtw.QMainWindow, Ui_MainWindow):
 
         # Pair Fault Sensing: Drive #1 Shoulder Motors, Drive #2 Pan/Tilt/Aux. Binary Output: Fault/No Fault
         # (Phidget Channel Qty: 2)
-        self.Drive1Fault = FaultSense("DigitalInput", "HUB1", 0, 0, self.b_drive1_fault)
-        self.Drive2Fault = FaultSense("DigitalInput", "HUB1", 5, 0, self.b_drive2_fault)
+        self.Drive1Fault = FaultSense("DigitalInput", "HUB1", 0, 0, self.b_drive1_fault)  ##
+        self.Drive2Fault = FaultSense("DigitalInput", "HUB1", 5, 0, self.b_drive2_fault)  ##
         self.b_drive1_fault.pressed.connect(self.resetPressed)
         self.b_drive2_fault.pressed.connect(self.resetPressed)
 
         # Pair Thermocouples with Label on GUI (Phidget Channel Qty: 2)
-        self.TempDrive1 = Thermometer("TemperatureSensor", "HUB4", 2, 1, self.l_tempDrive1)
-        self.TempDrive2 = Thermometer("TemperatureSensor", "HUB4", 2, 2, self.l_tempDrive2)
+        self.TempDrive1 = Thermometer("TemperatureSensor", "HUB0", 4, 1, self.l_tempDrive1)  ##
+        self.TempDrive2 = Thermometer("TemperatureSensor", "HUB0", 4, 2, self.l_tempDrive2)  ##
         self.TempDrive1.high_temp_warning.connect(self.temperatureWarning)
         self.TempDrive2.high_temp_warning.connect(self.temperatureWarning)
 
@@ -1345,10 +1459,10 @@ class UserWindow(qtw.QMainWindow, Ui_MainWindow):
         self.Enable = EnableMotorsButton(self.b_enable, self.swBus, self.swEnable, self.swLogic)
 
         # Initialize Voltage Input Devices That Represent Motor Current (Phidget Channel Qty: 4)
-        self.vm_1A = CurrentFeedback("VoltageInput", "HUB4", 0, 0, self.l_current1A)
-        self.vm_1B = CurrentFeedback("VoltageInput", "HUB3", 5, 0, self.l_current1B)
-        self.vm_2A = CurrentFeedback("VoltageInput", "HUB3", 3, 0, self.l_current2A)
-        self.vm_2B = CurrentFeedback("VoltageInput", "HUB3", 2, 0, self.l_current2B)
+        self.vm_1A = CurrentFeedback("VoltageInput", "HUB2", 4, 0, self.l_current1A)  ##
+        self.vm_1B = CurrentFeedback("VoltageInput", "HUB2", 5, 0, self.l_current1B)  ##
+        self.vm_2A = CurrentFeedback("VoltageInput", "HUB2", 3, 0, self.l_current2A)  ##
+        self.vm_2B = CurrentFeedback("VoltageInput", "HUB2", 2, 0, self.l_current2B)  ##
 
         # Initialize heartbeat timer to toggle status LED every second. Heartbeat starts when all Phidgets are connected
         self.heartbeat = qtc.QTimer()
@@ -1367,6 +1481,8 @@ class UserWindow(qtw.QMainWindow, Ui_MainWindow):
         # self.setFocus()
         app.focusChanged.connect(self.rumbleContinuation)
         self.setFocusPolicy(qtc.Qt.StrongFocus)  # This only works when the user clicks on the
+        # Load the LED settings
+        self.LightControl.initLighting()
 
     @qtc.pyqtSlot(float)
     def updateCurrentWarning(self, value):
