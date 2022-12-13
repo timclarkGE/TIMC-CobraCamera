@@ -490,5 +490,5 @@ class Ui_MainWindow(object):
         self.serialNumberSelect3.setToolTip(_translate("MainWindow", "Select controller, if not listed parmeter file is not installed."))
         self.menuSettings.setTitle(_translate("MainWindow", "Settings"))
         self.actionOpen_Alert_Current.setText(_translate("MainWindow", "High Current Warning"))
-        self.actionOpen_Alert_Current.setStatusTip(_translate("MainWindow", "Set the current in (A) for when the user is alerted for high current."))
+        self.actionOpen_Alert_Current.setStatusTip(_translate("MainWindow", "Set the current_tilt in (A) for when the user is alerted for high current_tilt."))
         self.actionAdd_Config_Files.setText(_translate("MainWindow", "Add Config Files"))

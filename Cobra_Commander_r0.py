@@ -372,7 +372,7 @@ class ToggleSwitch(Phidget):
             return -1
 
 
-# Class for measuring motor current
+# Class for measuring motor current_tilt
 class CurrentFeedback(Phidget):
     trans_con = 0.25  # A/V transconductance
     high_current_warning = 0.2
@@ -397,10 +397,10 @@ class CurrentFeedback(Phidget):
             self.high_current_state = False
             self.rumble_value = 0
 
-        # Check if current is high and alert user with red background
+        # Check if current_tilt is high and alert user with red background
         alert = abs(current) > CurrentFeedback.high_current_warning
 
-        # If there is a high current and the high current state has not been activated
+        # If there is a high current_tilt and the high current_tilt state has not been activated
         if alert and not self.high_current_state:
             # If the motors are enabled then alert the user
             if mw.Enable.isActive:
@@ -414,7 +414,7 @@ class CurrentFeedback(Phidget):
             self.high_current_state = False
             self.rumble_value = 0
 
-        # Rumble if any axis are in the high current state
+        # Rumble if any axis are in the high current_tilt state
         rumble_check = 0
         alert_rumble_freq = 50000
         for i in CurrentFeedback.instance_list:
@@ -1238,7 +1238,7 @@ class ConfigurationManager:
         mw.CameraPWR.validateButtonColor()
 
 
-# Popup window with the ability to set the warning motor current threshold
+# Popup window with the ability to set the warning motor current_tilt threshold
 class DialogWindowAlertCurrent(qtw.QDialog, Ui_Dialog):
     max_current = 0.6  # Amps
     submitted = qtc.pyqtSignal(float)

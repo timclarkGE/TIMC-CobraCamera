@@ -59,6 +59,8 @@ NE = LG
 SE = LG
 SW = LG
 
+MOTOR_RESISTANCE = 84
+
 Net.enableServerDiscovery(PhidgetServerType.PHIDGETSERVER_DEVICEREMOTE)
 # Enable phidget logging
 try:
@@ -81,11 +83,11 @@ class GamepadInput(EventHandler, qtc.QObject):
         super(GamepadInput, self).__init__(controller)
         qtc.QObject.__init__(self)
         # TIMC
-        # self.gpb_wide = GamepadButton("BACK", mw.CameraWide)
-        # self.gpb_tele = GamepadButton("START", mw.CameraTele)
-        # self.gpb_far = GamepadButton("RIGHT_SHOULDER", mw.CameraFar)
-        # self.gpb_near = GamepadButton("LEFT_SHOULDER", mw.CameraNear)
-        # self.gpb_camera = GamepadCameraButtons(self.gpb_wide, self.gpb_tele, self.gpb_far, self.gpb_near)
+        self.gpb_wide = GamepadButton("BACK", mw.CameraWide)
+        self.gpb_tele = GamepadButton("START", mw.CameraTele)
+        self.gpb_far = GamepadButton("RIGHT_SHOULDER", mw.CameraFar)
+        self.gpb_near = GamepadButton("LEFT_SHOULDER", mw.CameraNear)
+        self.gpb_camera = GamepadCameraButtons(self.gpb_wide, self.gpb_tele, self.gpb_far, self.gpb_near)
         self.controller = controller
         self.lightState = 0  # 0: Light Mode Off, 1: Light Vector Mode, 2: Light Intensity Mode
         self.lightTimer = 0
@@ -259,6 +261,8 @@ class Phidget(VoltageOutput, VoltageInput, DigitalOutput, DigitalInput, Temperat
     attached_phidgets = 0
     attached_phidgets_mask = 0
     instance_list = []
+    data_interval = 80  # ms
+    voltage_change_trigger = 0.01
 
     def __init__(self, phidget_type, sn, hub_port, ch, change_handler=None):
         if phidget_type == "VoltageOutput":
@@ -298,11 +302,16 @@ class Phidget(VoltageOutput, VoltageInput, DigitalOutput, DigitalInput, Temperat
         self.setOnAttachHandler(self.onAttach)
         self.setOnDetachHandler(self.onDetach)
         self.setOnErrorHandler(self.onError)
+        self.phidgetType = phidget_type
 
     # Set an instance variable representing phidget channel is attached and update class variable
     def onAttach(self, trash):
         self.attached = 1
         Phidget.attached_phidgets |= (0b1 << self.id)
+        # Set the data interval and trigger for the phidgets which sense voltage for calculating current
+        if self.phidgetType == "VoltageInput":
+            self.setDataInterval(Phidget.data_interval)
+            self.setVoltageChangeTrigger(Phidget.voltage_change_trigger)
 
     # Set a instance variable representing phidget channel is not attached and update class variable
     def onDetach(self, trash):
@@ -381,35 +390,50 @@ class ToggleSwitch(Phidget):
             return -1
 
 
-# Class for measuring motor current
-class CurrentFeedback(Phidget):
-    trans_con = 0.25  # A/V transconductance
+# Class for measuring motor current_tilt
+class CurrentFeedback(Phidget, qtc.QObject):
+    current_updated = qtc.pyqtSignal()  # TIMC test signal to be deleted later
+    trans_con = 0.25  # A/V transconductance for converting voltage to current
     high_current_warning = 0.2
-    num_of_feedback = 0
     instance_list = []
 
-    def __init__(self, phidget_type, sn, hub_port, ch, label: qtw.QLabel):
+    def __init__(self, phidget_type, sn, hub_port, ch, label: qtw.QLabel, slider_power: qtw.QSlider,
+                 slider_speed: qtw.QSlider):
         super(CurrentFeedback, self).__init__(phidget_type, sn, hub_port, ch, self.onUpdate)
+        qtc.QObject.__init__(self)
         self.label = label
+        self.power_slider = slider_power
+        self.speed_slider = slider_speed
         self.high_current_state = False
         self.rumble_value = 0
         CurrentFeedback.instance_list.append(self)
 
     def onUpdate(self, trash, voltage):
-        current = CurrentFeedback.trans_con * voltage
+        current = abs(CurrentFeedback.trans_con * voltage)
         # In all instances of the motors being active, update the text
         if mw.Enable.isActive:
-            self.label.setText("{:.3f}".format(abs(current)) + " (A)")
+            self.label.setText("{:.3f}".format(current) + " (A)")
+            # Calculate voltage drop over umbilical and motor
+            v_drop = current * 9.8 + current * MOTOR_RESISTANCE
+            # Calculate the required voltage at P5 to achieve commanded voltage
+            new_voltage = v_drop + (self.speed_slider.value() / 10) * 7.2
+            # Convert new voltage to new command voltage set point
+            set_point = new_voltage / 7.2
+            if 10 >= set_point >= -10:
+                self.power_slider.setValue(int(abs(set_point) * 10))
+
+            # self.current_updated.emit("{:.3f}".format(abs(current_tilt)) + " (A)", self.description)
+            # self.current_updated.emit()
         elif self.label.text() != "N/A (A)":
             self.label.setText("N/A (A)")
             self.label.setStyleSheet("background-color : light grey")
             self.high_current_state = False
             self.rumble_value = 0
 
-        # Check if current is high and alert user with red background
-        alert = abs(current) > CurrentFeedback.high_current_warning
+        # Check if current_tilt is high and alert user with red background
+        alert = current > CurrentFeedback.high_current_warning
 
-        # If there is a high current and the high current state has not been activated
+        # If there is a high current_tilt and the high current_tilt state has not been activated
         if alert and not self.high_current_state:
             # If the motors are enabled then alert the user
             if mw.Enable.isActive:
@@ -423,7 +447,7 @@ class CurrentFeedback(Phidget):
             self.high_current_state = False
             self.rumble_value = 0
 
-        # Rumble if any axis are in the high current state
+        # Rumble if any axis are in the high current_tilt state
         rumble_check = 0
         alert_rumble_freq = 50000
         for i in CurrentFeedback.instance_list:
@@ -779,7 +803,7 @@ class CameraLighting(qtc.QObject):
         else:
             self.enableButton.setStyleSheet("background-color : red")
 
-    # When user clicks on "Set Minimum" the current position of the LED control sliders will be used.
+    # When user clicks on "Set Minimum" the current_tilt position of the LED control sliders will be used.
     def setMinimumBrightnessFromSlider(self):
         count = 0
         a = []
@@ -811,15 +835,15 @@ class CameraLighting(qtc.QObject):
             span = i.minimum_sp - i.sliderMinimum
             i.slider.setValue(int(span * percentage))
 
-    # Method which is called by a timer to rotate the group dial for brightness based on gamepad input
+    # Method which is called by a timer to increase the group brightness based on gamepad input
     def gamepadUpdateGroupBrightness(self):
         if self.setPoint != 0:
-            sp = (self.setPoint + self.GroupIntensity.value()) % 99
+            sp = (self.setPoint + self.GroupIntensity.value())
             self.GroupIntensity.setValue(sp)
 
-    # Method which starts a timer for updating the groupd dial for brightness
+    # Method which starts a timer for updating the slider for group brightness
     def gamepadProcessSetpoint(self):
-        # Start a timer that updates the group brightness dial every 100 ms
+        # Start a timer that updates the group brightness every 100 ms
         self.onTimerUpdateGroup.start(100)
 
     def gamepadThrowLight(self, x, y):
@@ -909,6 +933,15 @@ class SimpleButton:
     focus_far = b'\x81\x01\x04\x08\x02\xFF'
     focus_near = b'\x81\x01\x04\x08\x03\xFF'
     focus_stop = b'\x81\x01\x04\x08\x00\xFF'
+    activate_full_auto_exposure = b'\x81\x01\x04\x39\x00\xFF'
+    increase_exposure_compensation = b'\x81\x01\x04\x0E\x02\xFF'
+    decrease_exposure_compensation = b'\x81\x01\x04\x0E\x03\xFF'
+    reset_exposure_compensation = b'\x81\x01\x04\x0E\x00\xFF'
+
+    activate_bright_mode = b'\x81\x01\x04\x39\x0D\xFF'
+    bright_up = b'\x81\x01\x04\x0D\x02\xFF'
+    bright_down = b'\x81\x01\x04\x0D\x03\xFF'
+    reset_bright_mode = b'\x81\x01\x04\x0D\x00\xFF'
 
     def __init__(self, button, cmd):
         self.button = button
@@ -927,6 +960,23 @@ class SimpleButton:
             data = self.focus_far
         elif self.cmd == "m/s":
             data = self.focus_toggle
+        elif self.cmd == "full_auto":
+            data = self.activate_full_auto_exposure
+        elif self.cmd == "e_comp_inc":
+            data = self.increase_exposure_compensation
+        elif self.cmd == "e_comp_dec":
+            data = self.decrease_exposure_compensation
+        elif self.cmd == "e_comp_reset":
+            data = self.reset_exposure_compensation
+        elif self.cmd == "bright_mode":
+            data = self.activate_bright_mode
+        elif self.cmd == "bright_inc":
+            data = self.bright_up
+        elif self.cmd == "bright_dec":
+            data = self.bright_down
+        elif self.cmd == "bright_reset":
+            data = self.reset_bright_mode
+
         self.s.write(data)
 
     def sendStopCommand(self):
@@ -1013,11 +1063,11 @@ class GamepadButton:
         self.buttonActive = False
 
     def pressed(self):
-        self.linked_gui_button.activate()
+        self.linked_gui_button.sendStartCommand()
         self.buttonActive = True
 
     def released(self):
-        self.linked_gui_button.deactivate()
+        self.linked_gui_button.sendStopCommand()
         self.buttonActive = False
 
     def isActive(self):
@@ -1083,11 +1133,7 @@ class GamepadCameraButtons:
             self.near.released()
 
     def toggle_ms(self):
-        # Check if manual select is not active
-        if not mw.CameraMS.switch.grabState():
-            mw.CameraMS.activate()
-            time.sleep(0.15)
-            mw.CameraMS.deactivate()
+        mw.CameraMS.sendStartCommand()
 
 
 # The state of the controller as defined by three hub serial numbers and LED values
@@ -1130,7 +1176,6 @@ class State:
             NE = self.leds[1]
             SE = self.leds[2]
             SW = self.leds[3]
-
 
             return True
         else:
@@ -1322,7 +1367,6 @@ class ConfigurationManager:
         mw.LightControl.initLighting()
         mw.Enable.validateButtonColor()
         mw.LightControl.validateButtonColor()
-        # TIMC
         mw.CameraPWR.validateButtonColor()
 
     # Update the configuration file with new LED settings
@@ -1334,7 +1378,7 @@ class ConfigurationManager:
             f = open(self.configurations[self.activeInstanceIndex].fileName, "r")
             contents = f.read()
             f.close()
-            # Extract current LED settings
+            # Extract current_tilt LED settings
             for i in range(len(search_text)):
                 data.append(contents.split(search_text[i])[1].split("\n")[0])
 
@@ -1349,7 +1393,8 @@ class ConfigurationManager:
             f.write(contents)
             f.close()
 
-# Popup window with the ability to set the warning motor current threshold
+
+# Popup window with the ability to set the warning motor current_tilt threshold
 class DialogWindowAlertCurrent(qtw.QDialog, Ui_Dialog):
     max_current = 0.6  # Amps
     submitted = qtc.pyqtSignal(float)
@@ -1388,19 +1433,12 @@ class UserWindow(qtw.QMainWindow, Ui_MainWindow):
         self.CM = ConfigurationManager(self.serialNumberSelect3)
 
         # Initialize Switches (Phidget Channel Qty: 11)
-        self.swBus = ToggleSwitch("DigitalOutput", "HUB0", 5, 3)  ##
-        self.swEnable = ToggleSwitch("DigitalOutput", "HUB0", 1, 1)  ##
-        self.swStatusLED = ToggleSwitch("DigitalOutput", "HUB0", 1, 3)  ##
-        self.swCameraPWR = ToggleSwitch("DigitalOutput", "HUB0", 5, 1)  ##
-
-        # self.swCameraNear = ToggleSwitch(None, None, None, None)##
-        # self.swCameraFar = ToggleSwitch(None, None, None, None)##
-        # self.swCameraWide = ToggleSwitch(None, None, None, None)##
-        # self.swCameraTele = ToggleSwitch(None, None, None, None)##
-        # self.swCameraMS = ToggleSwitch(None, None, None, None)##
-
-        self.swEnableLEDs = ToggleSwitch("DigitalOutput", "HUB0", 1, 2)  ##
-        self.swLogic = ToggleSwitch("DigitalOutput", "HUB0", 1, 0)  ##
+        self.swBus = ToggleSwitch("DigitalOutput", "HUB0", 5, 3)
+        self.swEnable = ToggleSwitch("DigitalOutput", "HUB0", 1, 1)
+        self.swStatusLED = ToggleSwitch("DigitalOutput", "HUB0", 1, 3)
+        self.swCameraPWR = ToggleSwitch("DigitalOutput", "HUB0", 5, 1)
+        self.swEnableLEDs = ToggleSwitch("DigitalOutput", "HUB0", 1, 2)
+        self.swLogic = ToggleSwitch("DigitalOutput", "HUB0", 1, 0)
 
         # Initialize Simple Buttons
         self.CameraPWR = SimpleToggleButton(self.b_cameraPower, self.swCameraPWR)
@@ -1409,13 +1447,20 @@ class UserWindow(qtw.QMainWindow, Ui_MainWindow):
         self.CameraWide = SimpleButton(self.b_wide, "out")
         self.CameraTele = SimpleButton(self.b_tele, "in")
         self.CameraMS = SimpleButton(self.b_manualSelect, "m/s")
+        self.CameraExpSel = SimpleButton(self.b_activate_full_auto_exposure_mode, "full_auto")
+        self.CameraExpInc = SimpleButton(self.b_exp_comp_increase, "e_comp_inc")
+        self.CameraExpDec = SimpleButton(self.b_exp_comp_decrease, "e_comp_dec")
+        self.CameraExpReset = SimpleButton(self.b_exp_comp_reset, "e_comp_reset")
+        self.CameraBrightSel = SimpleButton(self.b_activate_bright_mode, "bright_mode")
+        self.CameraBrightInc = SimpleButton(self.b_bright_mode_increase, "bright_inc")
+        self.CameraBrightDec = SimpleButton(self.b_bright_mode_decrease, "bright_dec")
+        self.CameraBrightReset = SimpleButton(self.b_bright_mode_reset, "bright_reset")
 
         # Initialize LED Brightness Command Voltage (Phidget Channel Qty: 4)
-
-        self.NorthWestLEDcmd = VariableVoltageSource("VoltageOutput", "HUB1", 4, 0)  ##
-        self.NorthEastLEDcmd = VariableVoltageSource("VoltageOutput", "HUB1", 1, 0)  ##
-        self.SouthEastLEDcmd = VariableVoltageSource("VoltageOutput", "HUB1", 3, 0)  ##
-        self.SouthWestLEDcmd = VariableVoltageSource("VoltageOutput", "HUB1", 2, 0)  ##
+        self.NorthWestLEDcmd = VariableVoltageSource("VoltageOutput", "HUB1", 4, 0)
+        self.NorthEastLEDcmd = VariableVoltageSource("VoltageOutput", "HUB1", 1, 0)
+        self.SouthEastLEDcmd = VariableVoltageSource("VoltageOutput", "HUB1", 3, 0)
+        self.SouthWestLEDcmd = VariableVoltageSource("VoltageOutput", "HUB1", 2, 0)
 
         # Pair LED with GUI Slider Bar
         self.NorthWestLED = LightEmittingDiode(self.NorthWestLEDcmd, self.s_nw, "nw_led")
@@ -1430,11 +1475,10 @@ class UserWindow(qtw.QMainWindow, Ui_MainWindow):
                                            self.nw_edit, self.ne_edit, self.se_edit, self.sw_edit, self.apply_min_sp)
         self.LightControl.updated_minimum_brightness.connect(self.CM.updateConfigurationForLEDs)
         # Initialize Motors Command Voltage (Phidget Channel Qty: 4)
-        self.Motor1Acmd = VariableVoltageSource("VoltageOutput", "HUB0", 2, 0)  ##
-        self.Motor1Bcmd = VariableVoltageSource("VoltageOutput", "HUB0", 3, 0)  ##
-        self.Motor2Acmd = VariableVoltageSource("VoltageOutput", "HUB2", 1, 0)  ##
-        self.Motor2Bcmd = VariableVoltageSource("VoltageOutput", "HUB2", 0, 0)  ##
-        # self.Motor2Ccmd = VariableVoltageSource("VoltageOutput", HUB2, 2, 0) # Aux motor, ready for future designs
+        self.Motor1Acmd = VariableVoltageSource("VoltageOutput", "HUB0", 2, 0)
+        self.Motor1Bcmd = VariableVoltageSource("VoltageOutput", "HUB0", 3, 0)
+        self.Motor2Acmd = VariableVoltageSource("VoltageOutput", "HUB2", 1, 0)
+        self.Motor2Bcmd = VariableVoltageSource("VoltageOutput", "HUB2", 0, 0)
 
         # Pair GUI Slider and Buttons with Motor Command Voltage for Independent Movement of Motors
         self.Motor2A = IndependentMotor(self.Motor2Acmd, self.s_pan, self.b_pan_negative, self.b_pan_positive)
@@ -1444,14 +1488,14 @@ class UserWindow(qtw.QMainWindow, Ui_MainWindow):
 
         # Pair Fault Sensing: Drive #1 Shoulder Motors, Drive #2 Pan/Tilt/Aux. Binary Output: Fault/No Fault
         # (Phidget Channel Qty: 2)
-        self.Drive1Fault = FaultSense("DigitalInput", "HUB1", 0, 0, self.b_drive1_fault)  ##
-        self.Drive2Fault = FaultSense("DigitalInput", "HUB1", 5, 0, self.b_drive2_fault)  ##
+        self.Drive1Fault = FaultSense("DigitalInput", "HUB1", 0, 0, self.b_drive1_fault)
+        self.Drive2Fault = FaultSense("DigitalInput", "HUB1", 5, 0, self.b_drive2_fault)
         self.b_drive1_fault.pressed.connect(self.resetPressed)
         self.b_drive2_fault.pressed.connect(self.resetPressed)
 
         # Pair Thermocouples with Label on GUI (Phidget Channel Qty: 2)
-        self.TempDrive1 = Thermometer("TemperatureSensor", "HUB0", 4, 1, self.l_tempDrive1)  ##
-        self.TempDrive2 = Thermometer("TemperatureSensor", "HUB0", 4, 2, self.l_tempDrive2)  ##
+        self.TempDrive1 = Thermometer("TemperatureSensor", "HUB0", 4, 1, self.l_tempDrive1)
+        self.TempDrive2 = Thermometer("TemperatureSensor", "HUB0", 4, 2, self.l_tempDrive2)
         self.TempDrive1.high_temp_warning.connect(self.temperatureWarning)
         self.TempDrive2.high_temp_warning.connect(self.temperatureWarning)
 
@@ -1459,10 +1503,12 @@ class UserWindow(qtw.QMainWindow, Ui_MainWindow):
         self.Enable = EnableMotorsButton(self.b_enable, self.swBus, self.swEnable, self.swLogic)
 
         # Initialize Voltage Input Devices That Represent Motor Current (Phidget Channel Qty: 4)
-        self.vm_1A = CurrentFeedback("VoltageInput", "HUB2", 4, 0, self.l_current1A)  ##
-        self.vm_1B = CurrentFeedback("VoltageInput", "HUB2", 5, 0, self.l_current1B)  ##
-        self.vm_2A = CurrentFeedback("VoltageInput", "HUB2", 3, 0, self.l_current2A)  ##
-        self.vm_2B = CurrentFeedback("VoltageInput", "HUB2", 2, 0, self.l_current2B)  ##
+        self.vm_1A = CurrentFeedback("VoltageInput", "HUB2", 4, 0, self.l_current1A, self.s_extend_retract,
+                                     self.s_extend_retract_input)
+        self.vm_1B = CurrentFeedback("VoltageInput", "HUB2", 5, 0, self.l_current1B, self.s_rotate, self.s_rotate_input)
+        self.vm_2A = CurrentFeedback("VoltageInput", "HUB2", 3, 0, self.l_current2A, self.s_pan, self.s_pan_input)
+        self.vm_2B = CurrentFeedback("VoltageInput", "HUB2", 2, 0, self.l_current2B, self.s_tilt, self.s_tilt_input)
+        self.vm_1A.current_updated.connect(self.updateCurrentLabel)  # TIMC to delete later
 
         # Initialize heartbeat timer to toggle status LED every second. Heartbeat starts when all Phidgets are connected
         self.heartbeat = qtc.QTimer()
@@ -1483,6 +1529,19 @@ class UserWindow(qtw.QMainWindow, Ui_MainWindow):
         self.setFocusPolicy(qtc.Qt.StrongFocus)  # This only works when the user clicks on the
         # Load the LED settings
         self.LightControl.initLighting()
+
+    # TIMC this is a test function to be deleted later
+    def updateCurrentLabel(self):
+        current = 0
+        channel = 0
+        if channel == "1A":
+            self.l_current1A.setText(current)
+        elif channel == "1B":
+            self.l_current1B.setText(current)
+        elif channel == "2A":
+            self.l_current2A.setText(current)
+        elif channel == "2B":
+            self.l_current2B.setText(current)
 
     @qtc.pyqtSlot(float)
     def updateCurrentWarning(self, value):
@@ -1592,5 +1651,4 @@ if __name__ == '__main__':
 
     # Connect a signal from the gamepad thread to update the status bar in the main window
     my_handler.message_mode.connect(mw.updateLightMode)
-
     app.exec_()

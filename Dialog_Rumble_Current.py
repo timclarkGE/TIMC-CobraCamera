@@ -53,5 +53,5 @@ class Ui_Dialog(object):
     def retranslateUi(self, Dialog):
         _translate = QtCore.QCoreApplication.translate
         Dialog.setWindowTitle(_translate("Dialog", "Setting"))
-        self.s_alertCurrent.setToolTip(_translate("Dialog", "Set current at which gamepad rumbles and current shows red."))
+        self.s_alertCurrent.setToolTip(_translate("Dialog", "Set current_tilt at which gamepad rumbles and current_tilt shows red."))
         self.l_high_current.setText(_translate("Dialog", "High Current Alert (A)"))

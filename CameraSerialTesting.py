@@ -26,6 +26,17 @@ focus_far = b'\x81\x01\x04\x08\x02\xFF'
 focus_near = b'\x81\x01\x04\x08\x03\xFF'
 focus_stop = b'\x81\x01\x04\x08\x00\xFF'
 focus_toggle = b'\x81\x01\x04\x38\x10\xFF'
+focus_auto = b'\x81\x01\x04\x38\x02\xFF'
+focus_manual = b'\x81\x01\x04\x38\x03\xFF'
+wide_dynamic_range_on = b'\x81\x01\x04\x3D\x02\xFF'
+wide_dynamic_range_off = b'\x81\x01\x04\x3D\x03\xFF'
+blc_on = b'\x81\x01\x04\x33\x02\xFF'
+blc_off = b'\x81\x01\x04\x33\x03\xFF'
+enter = b'\x81\x01\x70\x01\x26\xFF'
+bright_mode = b'\x81\x01\x04\x39\x0D\xFF'
+bright_up = b'\x81\x01\x04\x0D\x02\xFF'
+bright_down = b'\x81\x01\x04\x0D\x03\xFF'
+full_auto = b'\x81\x01\x04\x39\x00\xFF'
 
 exposure_state = False
 
@@ -80,7 +91,8 @@ ser = serial.Serial('COM4', 9600)
 # l = subprocess.run()
 
 
-
+def enter_pressed():
+    ser.write(enter)
 
 def func_zoom_in(event):
     print("Ready to Zoom In")
@@ -166,7 +178,44 @@ def func_inquiry():
     while ser.inWaiting():
         print(ser.read().hex())
 
+def func_turn_auto_focus_on():
+    print("Set Auto Focus On")
+    ser.write(focus_auto)
+
+def func_turn_manual_focus_on():
+    print("Set Manual Focus On")
+    ser.write(focus_manual)
+
+def func_wdr_on():
+    print("Turing on WDR")
+    ser.write(wide_dynamic_range_on)
+
+def func_wdr_off():
+    print("Turing off WDR")
+    ser.write(wide_dynamic_range_off)
+
+def func_blc_on():
+    print("Turing on BLC")
+    ser.write(blc_on)
+
+def func_blc_off():
+    print("Turing off BLC")
+    ser.write(blc_off)
+
+def func_bright_mode_on():
+    ser.write(bright_mode)
+
+def func_full_auto_mode_on():
+    ser.write(full_auto)
+
+def func_bright_mode_up():
+    ser.write(bright_up)
+
+def func_bright_mode_down():
+    ser.write(bright_down)
+
 main_frame = tk.Tk()
+bt_enter = tk.Button(main_frame,text="enter", command=enter_pressed)
 bt_zoom_in = tk.Button(main_frame, text="zoom in")
 bt_zoom_out = tk.Button(main_frame, text="zoom out")
 bt_focus_near = tk.Button(main_frame, text="focus near")
@@ -180,6 +229,16 @@ bt_toggle_exposure_compensation = tk.Button(main_frame, text="toggle exposure co
 bt_reset_exposure_compensation = tk.Button(main_frame, text="reset exposure comp", command=func_reset_exposure_comp)
 bt_menu = tk.Button(main_frame, text="menu", command=func_menu)
 bt_inquiry = tk.Button(main_frame, text="?", command=func_inquiry)
+bt_auto_focus_on = tk.Button(main_frame, text = "AUTO FOCUS", command=func_turn_auto_focus_on)
+bt_manual_focus_on = tk.Button(main_frame, text = "Manual FOCUS", command=func_turn_manual_focus_on)
+bt_wdr_on = tk.Button(main_frame, text = "WDR ON", command=func_wdr_on)
+bt_wdr_off = tk.Button(main_frame, text = "WDR OFF", command=func_wdr_off)
+bt_blc_on = tk.Button(main_frame, text = "BLC ON", command=func_blc_on)
+bt_blc_off = tk.Button(main_frame, text = "BLC OFF", command=func_blc_off)
+bt_full_auto_on = tk.Button(main_frame, text = "Full AUTO", command=func_full_auto_mode_on)
+bt_bright_mode_on = tk.Button(main_frame, text="BRIGHTMODE", command=func_bright_mode_on)
+bt_bright_mode_up = tk.Button(main_frame, text="BRIGHTMODE UP", command=func_bright_mode_up)
+bt_bright_mode_down = tk.Button(main_frame, text="BRIGHTMODE DOWN", command=func_bright_mode_down)
 
 bt_zoom_in.bind("<ButtonPress-1>", func_zoom_in)
 bt_zoom_out.bind("<ButtonPress-1>", func_zoom_out)
@@ -191,6 +250,7 @@ bt_focus_far.bind("<ButtonPress-1>", func_focus_far)
 bt_focus_near.bind("<ButtonRelease-1>", func_focus_stop)
 bt_focus_far.bind("<ButtonRelease-1>", func_focus_stop)
 
+bt_enter.pack()
 bt_zoom_in.pack()
 bt_zoom_out.pack()
 bt_focus_near.pack()
@@ -204,5 +264,16 @@ bt_toggle_exposure_compensation.pack()
 bt_reset_exposure_compensation.pack()
 bt_menu.pack()
 bt_inquiry.pack()
+bt_auto_focus_on.pack()
+bt_manual_focus_on.pack()
+bt_wdr_on.pack()
+bt_wdr_off.pack()
+bt_blc_on.pack()
+bt_blc_off.pack()
+bt_full_auto_on.pack()
+bt_bright_mode_on.pack()
+bt_bright_mode_up.pack()
+bt_bright_mode_down.pack()
+
 
 main_frame.mainloop()
