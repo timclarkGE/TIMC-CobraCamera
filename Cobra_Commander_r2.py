@@ -1,3 +1,5 @@
+import PyQt5.QtGui
+
 from Cobra_Commander_GUIr2 import Ui_MainWindow
 from Dialog_Rumble_Current import Ui_Dialog
 from PyQt5 import QtWidgets as qtw
@@ -86,6 +88,8 @@ class MyGamepadThread(qtc.QThread):
     tilted_positive = qtc.pyqtSignal(float)
     tilted_negative = qtc.pyqtSignal(float)
     tilt_stopped = qtc.pyqtSignal()
+    light_state_updated = qtc.pyqtSignal(list)  # NW, NE, SE, SW
+    intensity_state_updated = qtc.pyqtSignal(float)
 
     # def __init__(self, index_speed_signal, scan_speed_signal, enabled_index, enabled_scan):
     def __init__(self, over_current_signal):
@@ -138,26 +142,6 @@ class MyGamepadThread(qtc.QThread):
     def rumble_for_over_current(self):
         print(get_connected().index(True))
         print(set_vibration(get_connected().index(True), 50000, 50000))
-
-    # def update_index_restore_speed(self, speed):
-    #     if DEBUG:
-    #         print("# INDEX restore speed received")
-    #     self.index_restore_speed = speed
-    #
-    # def update_scan_restore_speed(self, speed):
-    #     if DEBUG:
-    #         print("# SCAN restore speed received")
-    #     self.scan_restore_speed = speed
-    #
-    # def update_enabled_status_for_index(self, state):
-    #     if DEBUG:
-    #         print("# Setting Gamepad INDEX to be:", state)
-    #     self.is_index_enabled = state
-    #
-    # def update_enabled_status_for_scan(self, state):
-    #     if DEBUG:
-    #         print("# Setting Gamepad SCAN to be:", state)
-    #     self.is_scan_enabled = state
 
     def run(self):
         while True:
@@ -240,6 +224,14 @@ class MyGamepadThread(qtc.QThread):
                     if not self.light_state:
                         self.process_if_move("shoulder", y_init_left, y_final_left, y_pcnfz_left, left_stick_y)
                         self.process_if_move("rotation", x_init_left, x_final_left, x_pcnfz_left, left_stick_x)
+                    # Light vector mode
+                    elif self.light_state == 1:
+                        # Update the brightness of the LEDs if there is an initial, final, or position change of the left joystick
+                        if x_init_left or y_init_left or x_final_left or y_final_left or x_pcnfz_left or y_pcnfz_left:
+                            self.throw_light(left_stick_x, left_stick_y)
+                    elif self.light_state == 2:
+                        if y_init_left or y_final_left or y_pcnfz_left:
+                            self.intensity_state_updated.emit(left_stick_y)
 
                     # Set the state variables of pan and tilt regardless
                     self.process_if_move("pan", x_init_right, x_final_right, x_pcnfz_right, right_stick_x)
@@ -303,6 +295,8 @@ class MyGamepadThread(qtc.QThread):
                 new_count = query_connections.count(True)
                 if new_count != 1:
                     self.gamepad_inactive.emit()
+                    self.deactivate_shoulder_and_rotation_axes()
+                    self.deactivate_pan_tilt_axes()
                 else:
                     self.gamepad_connected.emit()
 
@@ -311,8 +305,48 @@ class MyGamepadThread(qtc.QThread):
             # except:
             #     print("# Problem with Gamepad")
 
+    # Calculates the percentage of each LED to be on based on the left joystick position
+    def throw_light(self, x, y):
+        # Area of light square is 1, 1x1 square
+        a = 0.5  # 1/2 length of side
+        area = [0, 0, 0, 0]
+        res = 200  # Resolution for area calculation (for loop only takes integers)
+        dxdy = 0
+
+        # Calculate the corner vertices: NW, NE, SE, SW
+        nwc = [x - a, y + a]
+        nec = [x + a, y + a]
+        sec = [x + a, y - a]
+        swc = [x - a, y - a]
+
+        corners = [nwc, nec, sec, swc]
+
+        # Apply resolution to the vertices of the
+        for i in corners:
+            i[0] = int(i[0] * res)
+            i[1] = int(i[1] * res)
+
+        for y in range(nwc[1], swc[1], -1):
+            for x in range(nwc[0], nec[0]):
+                if y > 0 < x:
+                    area[1] += 1
+                elif y >= 0 >= x:
+                    area[0] += 1
+                elif y < 0 >= x:
+                    area[3] += 1
+                elif y < 0 < x:
+                    area[2] += 1
+                dxdy += 1
+
+        # Calculate the final area percentages
+        for i in range(len(area)):
+            area[i] = area[i] / dxdy
+
+        # Emit the signal with the four area percentages
+        self.light_state_updated.emit(area)
+
     def deactivate_shoulder_and_rotation_axes(self):
-        print("TODO, deactivate shoulder and rotation axes")
+        self.multi_stopped.emit()
         self.s_shoulder_extend_initial = False
         self.s_shoulder_extend_final = False
         self.s_shoulder_retract_initial = False
@@ -326,6 +360,23 @@ class MyGamepadThread(qtc.QThread):
         self.s_rotation_ccw_final = False
         self.s_rotation_stationary = True
         self.s_rotation_speed_changed = False
+
+    def deactivate_pan_tilt_axes(self):
+        self.pan_stopped.emit()
+        self.s_pan_positive_initial = False
+        self.s_pan_positive_final = False
+        self.s_pan_negative_initial = False
+        self.s_pan_negative_final = False
+        self.s_pan_stationary = True
+        self.s_pan_speed_changed = False
+
+        self.tilt_stopped.emit()
+        self.s_tilt_positive_initial = False
+        self.s_tilt_positive_final = False
+        self.s_tilt_negative_initial = False
+        self.s_tilt_negative_final = False
+        self.s_tilt_stationary = True
+        self.s_tilt_speed_changed = False
 
     # Process input from initial_gamepad_stick_change() and final_gamepad_stick_change()
     def process_if_move(self, axis, initial_movement, final_movement, pcnfz, current_position):
@@ -439,17 +490,9 @@ class MyGamepadThread(qtc.QThread):
             except:
                 print("ERROR Shoulder Calculation", x, y, round(math.sqrt(x ** 2 + y ** 2), 6))
 
-
-
-
     def stop(self):
-        if DEBUG:
-            print("# Gamepad thread terminated")
         self.exit()
         self.gamepad_inactive.emit()
-        # Restore GUI velocity to value before activating gamepad
-        self.index_speed_updated.emit(self.index_restore_speed)
-        self.scan_speed_updated.emit(self.scan_restore_speed)
         self.connected_last = tuple((False, False, False, False))
         self.btn_state_last = None
         self.thumb_state_last = None
@@ -570,6 +613,295 @@ class VariableVoltageSource(Phidget):
             self.setVoltage(value)
         except PhidgetException as e:
             print("Exception 4, " + str(self.id) + ": " + str(hex(e.code)) + " " + str(self) + " " + str(time.time()))
+
+
+# Added functionality to Phidget class for toggle and latching of switch
+class ToggleSwitch(Phidget, qtc.QObject):
+    switch_updated = qtc.pyqtSignal(int)
+
+    def __init__(self, phidget_type, sn, hub_port, ch):
+        super(ToggleSwitch, self).__init__(phidget_type, sn, hub_port, ch)
+        qtc.QObject.__init__(self)
+
+    # Toggle the state of the switch, latch output
+    def toggle(self):
+        try:
+            if not self.attached:
+                self.switch_updated.emit(-1)
+                return -1
+            elif self.getState():
+                self.switch_updated.emit(0)
+                self.setState(False)
+                return self.getState()
+            elif not self.getState():
+                self.switch_updated.emit(1)
+                self.setState(True)
+                return self.getState()
+        except PhidgetException as e:
+            print("Exception 0, " + str(self.id) + ": " + str(hex(e.code)) + " " + str(self) + " " + str(time.time()))
+            self.switch_updated.emit(-1)
+            return -1
+
+    def switch_on(self):
+        try:
+            if not self.attached:
+                self.switch_updated.emit(-1)
+                return -1
+            else:
+                self.setState(True)
+                self.switch_updated.emit(1)
+                return self.getState()
+        except PhidgetException as e:
+            print("Exception 1, " + str(self.id) + ": " + str(hex(e.code)) + " " + str(self) + " " + str(time.time()))
+            self.switch_updated.emit(-1)
+            return -1
+
+    def switch_off(self):
+        try:
+            if not self.attached:
+                self.switch_updated.emit(-1)
+                return -1
+            else:
+                self.setState(False)
+                self.switch_updated.emit(0)
+                return self.getState()
+        except PhidgetException as e:
+            print("Exception 2, " + str(self.id) + ": " + str(hex(e.code)) + " " + str(self) + " " + str(time.time()))
+            self.switch_updated.emit(-1)
+            return -1
+
+    def grabState(self):
+        try:
+            return self.getState()
+        except PhidgetException as e:
+            print("Exception 3, " + str(self.id) + ": " + str(hex(e.code)) + " " + str(self) + " " + str(time.time()))
+            self.switch_updated.emit(-1)
+            return -1
+
+
+# Phidget which senses as a digital input and emits a signal
+class DigitalSense(Phidget, qtc.QObject):
+    sensor_updated = qtc.pyqtSignal(bool)
+
+    def __init__(self, phidget_type, sn, hub_port, ch):
+        super(DigitalSense, self).__init__(phidget_type, sn, hub_port, ch, self.onUpdate)
+        qtc.QObject.__init__(self)
+        self.sensor_state = None
+
+    def onUpdate(self, trash, sensed_signal):
+        self.sensor_updated.emit(sensed_signal)
+        self.sensor_state = sensed_signal
+
+
+# Senses the thermocouples attached to the motor amplifiers
+class Thermometer(Phidget, qtc.QObject):
+    high_temp_warning = qtc.pyqtSignal(bool)
+    temperature_updated = qtc.pyqtSignal(str)
+    warning_temp = 0  # (F), initialized to something else at program startup
+
+    def __init__(self, phidget_type, sn, hub_port, ch):
+        Phidget.__init__(self, phidget_type, sn, hub_port, ch, self.onTempChange)
+        qtc.QObject.__init__(self)
+        self.highTempFlag = False
+
+    def onTempChange(self, trash, temperature):
+        f = (temperature * 9 / 5) + 32
+        self.temperature_updated.emit(str(round(f, 1)))
+        # Set a high temperature flag when the setpoint is exceeded
+        if f > self.warning_temp and self.highTempFlag == False:
+            self.high_temp_warning.emit(True)
+            self.highTempFlag = True
+        # Once the temperature decreases 2 degrees below the setpoint, reset the flag
+        elif f < (self.warning_temp - 2) and self.highTempFlag == True:
+            self.highTempFlag = False
+            self.high_temp_warning.emit(False)
+
+    def update_warning_temperature(self, new_temp):
+        Thermometer.warning_temp = new_temp
+
+
+# Gets slider and VVS to control LED
+class LightEmittingDiode:
+    def __init__(self, led_cmd: VariableVoltageSource, slider: qtw.QSlider, id):
+        self.enabled = False
+        self.slider = slider  # values 1-1000
+        self.LEDcmd = led_cmd
+        self.id = id
+        self.slider.valueChanged.connect(self.updateLED)
+        self.max_illumination = self.slider.minimum()
+        self.sliderMaximum = self.slider.maximum()  # Absolute minimum brightness
+        self.sliderMinimum = self.slider.minimum()  # Absolute maximum brightness
+        # Set the minimum slider control value for minimum_sp brightness
+        self.minimum_sp = self.sliderMaximum
+
+    # Update the LED brightness based on the new position reported by the slider
+    def updateLED(self):
+        if self.LEDcmd.isAttached():
+            if self.LEDcmd.getVoltageOutputRange() == VoltageOutputRange.VOLTAGE_OUTPUT_RANGE_10V:
+                self.LEDcmd.setVoltageOutputRange(VoltageOutputRange.VOLTAGE_OUTPUT_RANGE_5V)
+            self.LEDcmd.voltageSet(self.slider.value() / (self.sliderMaximum / 5.0))
+
+    def setMinimumBrightness(self, value):
+        self.slider.setMaximum(value)
+        self.minimum_sp = value
+        self.updateGlobals()
+
+    def resetBrightness(self):
+        self.slider.setMaximum(self.sliderMaximum)
+        self.minimum_sp = self.sliderMaximum
+        self.updateGlobals()
+
+    def updateGlobals(self):
+        global NW, NE, SE, SW
+        if self.id == "nw_led":
+            NW = self.minimum_sp
+        elif self.id == "ne_led":
+            NE = self.minimum_sp
+        elif self.id == "se_led":
+            SE = self.minimum_sp
+        elif self.id == "sw_led":
+            SW = self.minimum_sp
+
+    def set_intensity_percentage(self, percent):
+        span = self.sliderMaximum - self.sliderMinimum
+        new_sp = int(span * (1 - percent))
+        self.slider.setValue(new_sp)
+
+
+# Takes in the four LED's the two slider bars, LED enable, set minimum, and reset buttons
+class CameraLighting(qtc.QObject):
+    updated_minimum_brightness = qtc.pyqtSignal(str, str, str, str)
+
+    def __init__(self, led_nw: LightEmittingDiode, led_ne, led_se, led_sw, intensity_slider: qtw.QSlider,
+                 button_min: qtw.QPushButton, button_reset: qtw.QPushButton, button_enable: qtw.QPushButton,
+                 switch: ToggleSwitch, edit_nw: qtw.QLineEdit, edit_ne: qtw.QLineEdit, edit_se: qtw.QLineEdit,
+                 edit_sw: qtw.QLineEdit, button_apply: qtw.QPushButton):
+        qtc.QObject.__init__(self)
+        self.LEDs = []
+        self.LEDs.append(led_nw)
+        self.LEDs.append(led_ne)
+        self.LEDs.append(led_se)
+        self.LEDs.append(led_sw)
+        self.GroupIntensity = intensity_slider
+        self.lastGroupIntensityValue = 0
+        self.onTimerUpdateGroup = qtc.QTimer()
+        self.onTimerUpdateGroup.timeout.connect(self.gamepadUpdateGroupBrightness)
+        self.onTimerUpdateGroup.start(100)
+        self.setPoint = 0  # value that gets changed to be positive or negative, input from gamepad
+        self.setMinButton = button_min
+        self.resetButton = button_reset
+        self.enableButton = button_enable
+        self.enableSwitch = switch
+        self.edits = []
+        self.edits.append(edit_nw)
+        self.edits.append(edit_ne)
+        self.edits.append(edit_se)
+        self.edits.append(edit_sw)
+
+        integers_only = qtg.QIntValidator()
+        integers_only.setRange(1, 999)
+        for i in range(len(self.edits)):
+            self.edits[i].setValidator(integers_only)
+        self.applyButton = button_apply
+
+        self.enableButton.clicked.connect(self.toggleLEDs)
+        self.setMinButton.clicked.connect(self.setMinimumBrightnessFromSlider)
+        self.resetButton.clicked.connect(self.resetLEDs)
+        self.GroupIntensity.valueChanged.connect(self.updateGroupIntensity)
+        self.applyButton.clicked.connect(self.applyLineEditMinimumBrightness)
+
+    #
+    def initLighting(self):
+        global NW, NE, SE, SW
+        # Populate the edits with the global values determined at startup
+        self.edits[0].setText(str(NW))
+        self.edits[1].setText(str(NE))
+        self.edits[2].setText(str(SE))
+        self.edits[3].setText(str(SW))
+        self.LEDs[0].slider.setValue(NW)
+        self.LEDs[1].slider.setValue(NE)
+        self.LEDs[2].slider.setValue(SE)
+        self.LEDs[3].slider.setValue(SW)
+        self.setMinButton.click()
+        self.applyButton.click()
+
+    # Toggle power to LED drivers
+    def toggleLEDs(self):
+        if self.enableSwitch.isAttached():
+            # Set LED brightness before enabling power to LED drivers
+            for i in self.LEDs:
+                i.updateLED()
+            # Change state of switch
+            rv = self.enableSwitch.grabState()
+            if rv == 0:
+                if self.enableSwitch.switch_on() == 1:
+                    self.enableButton.setStyleSheet("background-color : green")
+            elif rv == 1:
+                if self.enableSwitch.switch_off() == 0:
+                    self.enableButton.setStyleSheet("background-color : light grey")
+            else:
+                self.enableButton.setStyleSheet("background-color : red")
+
+        else:
+            self.enableButton.setStyleSheet("background-color : red")
+
+    # When user clicks on "Set Minimum" the current_tilt position of the LED control sliders will be used.
+    def setMinimumBrightnessFromSlider(self):
+        count = 0
+        a = []
+        for i in self.LEDs:
+            value = i.slider.value()
+            i.setMinimumBrightness(value)
+            self.edits[count].setText(str(value))
+            i.updateLED()
+            a.append(str(value))
+            count += 1
+        self.updated_minimum_brightness.emit(a[0], a[1], a[2], a[3])
+
+    # Invoked when user applies values found in edit boxes to set the minimum brightness for LED's
+    def applyLineEditMinimumBrightness(self):
+        for i in range(len(self.edits)):
+            self.LEDs[i].setMinimumBrightness(int(self.edits[i].text()))
+
+    # Update all LED's such that their control input slider reverts back to default values
+    def resetLEDs(self):
+        for i in self.LEDs:
+            i.resetBrightness()
+
+    # Update all LED's to similar percentage brightness
+    def updateGroupIntensity(self, value):
+        for i in self.LEDs:
+            # Find the percentage of group intensity being requested by user
+            percentage = value / self.GroupIntensity.maximum()
+            # Calculate the range from maximum brightness to setting which corresponds to minimum brightness
+            span = i.minimum_sp - i.sliderMinimum
+            i.slider.setValue(int(span * percentage))
+
+    # Method which is called by a timer to increase the group brightness based on gamepad input
+    def gamepadUpdateGroupBrightness(self):
+        if self.setPoint != 0:
+            sp = (self.setPoint + self.GroupIntensity.value())
+            self.GroupIntensity.setValue(sp)
+
+    def updateSetPoint(self, value):
+        # Positive increase in light intensity, i.e. negative delta for slider
+        if value != 0:
+            self.setPoint = -int(value * 20)
+        else:
+            self.setPoint = 0
+
+    def update_LEDs_from_gamepad(self, intensities):
+        if len(intensities) == len(self.LEDs):
+            for i in range(len(intensities)):
+                self.LEDs[i].set_intensity_percentage(intensities[i])
+
+    # TODO: change this to signals
+    def validateButtonColor(self):
+        rv = self.enableSwitch.grabState()
+        if rv == -1:
+            self.enableButton.setStyleSheet("background-color : red")
+        elif rv == 0:
+            self.enableButton.setStyleSheet("background-color : light grey")
 
 
 # The state of the controller as defined by three hub serial numbers and LED values
@@ -719,7 +1051,7 @@ class ConfigurationManager:
             msg.setIcon(qtw.QMessageBox.Information)
             msg.setWindowTitle("Information")
             msg.setText(
-                "Copy cobra camera configuration files to the location:\n(see window that just opened)\n\n" + os.getcwd() + "\\" +
+                "Copy Cobra Camera configuration files to the location:\n(see window that just opened)\n\n" + os.getcwd() + "\\" +
                 self.configDir.split("./")[1].split("/")[0])
             msg.exec_()
 
@@ -785,7 +1117,8 @@ class ConfigurationManager:
     # Called when user changes configuration from the combobox
     def changeConfiguration(self):
         new_index = self.comboBox.currentIndex()
-        mw.Enable.enterFailSafe()
+        mw.enable.disable_motors()  # TIMC
+        # mw.Enable.enterFailSafe()
         for i in Phidget.instance_list:
             i.close()
         if self.activeInstanceIndex < self.offlineIndex:
@@ -801,9 +1134,11 @@ class ConfigurationManager:
 
         # After a configuration change, update the LED settings and validate the button colors
         mw.LightControl.initLighting()
-        mw.Enable.validateButtonColor()
+        # TODO: validate button colors
+        # mw.Enable.validateButtonColor()
         mw.LightControl.validateButtonColor()
-        mw.CameraPWR.validateButtonColor()
+        mw.enable.validate()
+        # mw.CameraPWR.validateButtonColor()
 
     # Update the configuration file with new LED settings
     def updateConfigurationForLEDs(self, nw, ne, se, sw):
@@ -842,7 +1177,6 @@ class Motor(qtc.QObject):
     def __init__(self, current: CurrentFeedback, v_cmd: VariableVoltageSource, ch):
         qtc.QObject.__init__(self)
         # Initialize state variables, sv
-        self.sv_motor_enabled = False
         self.sv_last_cmd_speed = 0  # units V
         self.sv_last_cmd_voltage = 0  # units V
         self.mtr_current = current
@@ -852,14 +1186,10 @@ class Motor(qtc.QObject):
 
     def jog_cw(self, speed):
         self.sv_last_cmd_speed = speed
-        if self.sv_motor_enabled:
-            self.v_cmd.voltageSet(self.sv_last_cmd_voltage)
 
     # Called from GUI or gamepad
     def jog_ccw(self, speed):
         self.sv_last_cmd_speed = -speed
-        if self.sv_motor_enabled:
-            self.v_cmd.voltageSet(self.sv_last_cmd_voltage)
 
     def stop_jog(self):
         self.sv_last_cmd_speed = 0
@@ -885,29 +1215,143 @@ class Motor(qtc.QObject):
             self.sv_last_cmd_voltage = new_voltage_input
 
 
+# TODO: Revisit this method to make it better, Q: Why does the pan and tilt motors work fine and they aren't "enabled"
 class EnableMotors(qtc.QObject):
-    def __init__(self, motor1: Motor, motor2: Motor, sw_bias: Phidget, sw_bus: Phidget, sw_enable: Phidget):
+    drive_enabled = qtc.pyqtSignal(int)
+    enable_validated = qtc.pyqtSignal(int)
+
+    def __init__(self, motor1: Motor, motor2: Motor, sw_bus: ToggleSwitch, sw_enable: ToggleSwitch):
         qtc.QObject.__init__(self)
         self.motor1 = motor1
-        self.motor2 = motor2  # TIMC fix this naming
-        self.sw_bias = sw_bias
+        self.motor2 = motor2
         self.sw_bus = sw_bus
+        self.state_sw_bus = False
         self.sw_enable = sw_enable
+        self.state_sw_enable = False
+        self.wait_timer = qtc.QTimer()
+        self.wait_timer.timeout.connect(self.enable_drive)
 
-    def enable_motor(self):
-        self.sw_bias.setState(True)
-        time.sleep(1)
-        self.sw_bus.setState(True)
-        time.sleep(0.25)
-        self.sw_enable.setState(True)
-        self.motor1.sv_motor_enabled = True
-        self.motor2.sv_motor_enabled = True
+    # Start the process to enable the motors, Bus voltage first
+    def enable_motors(self):
+        # Check the state of the switches to determine if the motors should be disabled or enabled
+        self.state_sw_enable = self.sw_enable.grabState()
+        self.state_sw_bus = self.sw_bus.grabState()
+        # Motors are disabled, then toggle to enabled
+        if self.state_sw_enable == 0 and self.state_sw_bus == 0:
+            self.enable_bus()
+        # Motors are enabled, then toggle to disabled
+        elif self.state_sw_enable == 1 and self.state_sw_bus == 1:
+            self.disable_motors()
+        # Fatal flaw, enter fail safe mode
+        else:
+            self.enter_fail_safe()
 
+    # Enable the bus, wait 250ms and then send the enable signal
+    def enable_bus(self):
+        self.state_sw_bus = self.sw_bus.switch_on()
+        self.wait_timer.start(250)
+
+    # Set the enable signal as true, check if switch state is correct and emit signal
+    def enable_drive(self):
+        self.state_sw_enable = self.sw_enable.switch_on()
+        self.wait_timer.stop()
+        if self.state_sw_enable and self.state_sw_bus:
+            self.drive_enabled.emit(True)
+
+    # Disable the motors
     def disable_motors(self):
-        self.sw_enable.setState(False)
-        self.sw_bus.setState(False)
-        self.motor1.sv_motor_enabled = False
-        self.motor2.sv_motor_enabled = False
+        self.state_sw_enable = self.sw_enable.switch_off()
+        self.state_sw_bus = self.sw_bus.switch_off()
+        # Motors are disabled, emit signal to change button color
+        if self.state_sw_enable == 0 and self.state_sw_bus == 0:
+            self.drive_enabled.emit(False)
+        # Fatal flaw, enter fail safe mode
+        else:
+            self.enter_fail_safe()
+
+    def enter_fail_safe(self):
+        if self.sw_enable.isAttached():
+            self.sw_enable.switch_off()
+        if self.sw_bus.isAttached():
+            self.sw_bus.switch_off()
+        self.drive_enabled.emit(-1)
+
+    def validate(self):
+        self.state_sw_enable = self.sw_enable.grabState()
+        self.state_sw_bus = self.sw_bus.grabState()
+        if self.state_sw_enable == 1 and self.state_sw_bus == 1:
+            self.enable_validated.emit(1)
+        elif self.state_sw_enable == 0 and self.state_sw_bus == 0:
+            self.enable_validated.emit(0)
+        else:
+            self.enable_validated.emit(-1)
+
+
+# Simulated joystick as alternate method to control LEDs not using the gamepad
+class LightJoystickWidget(qtw.QWidget):
+    light_state_updated = qtc.pyqtSignal(list)
+    sticky = 0.2  # values to not exceed 1 inclusive, sticky factor
+
+    def __init__(self, parent=None):
+        super(LightJoystickWidget, self).__init__(parent)
+        self.dim = 100
+        self.resize(self.dim, self.dim)
+        self.x = self.dim // 2
+        self.y = self.dim // 2
+
+    def paintEvent(self, event):
+        paint = qtg.QPainter()
+        paint.begin(self)
+        paint.setRenderHint(qtg.QPainter.Antialiasing)
+        paint.setBrush(qtc.Qt.white)
+        paint.drawRect(0, 0, 100, 100)
+        radius_x = self.dim // 10
+        radius_y = self.dim // 10
+        center = qtc.QPoint(self.x, self.y)
+        paint.setBrush(qtc.Qt.gray)
+        paint.drawEllipse(center, radius_x, radius_y)
+        paint.end()
+
+    # When the user moves the mouse
+    def mouseMoveEvent(self, event):
+        # Calculate sticky parameters
+        center = self.dim // 2
+        high = center * (1 + self.sticky)
+        low = center * (1 - self.sticky)
+
+        # Apply sticky behavior if mouse position is close to the center
+        if high > event.x() > low and high > event.y() > low:
+            self.x = center
+            self.y = center
+        else:
+            self.x, self.y = event.x(), event.y()
+
+        # Filter out mouse positions
+        if self.x > self.width():
+            self.x = self.width()
+        if self.y > self.height():
+            self.y = self.width()
+        if self.x < 0:
+            self.x = 0
+        if self.y < 0:
+            self.y = 0
+
+        north_west_led = int(self.dim - math.sqrt(self.y ** 2 + self.x ** 2)) / 100
+        north_east_led = int(self.dim - math.sqrt((self.y ** 2 + (self.width() - self.x) ** 2))) / 100
+        south_east_led = int(self.dim - math.sqrt(((self.height() - self.y) ** 2 + (self.width() - self.x) ** 2))) / 100
+        south_west_led = int(self.dim - math.sqrt(((self.height() - self.y) ** 2 + self.x ** 2))) / 100
+
+        if north_west_led < 0:
+            north_west_led = 0
+        if north_east_led < 0:
+            north_east_led = 0
+        if south_east_led < 0:
+            south_east_led = 0
+        if south_west_led < 0:
+            south_west_led = 0
+
+        self.light_state_updated.emit([north_west_led, north_east_led, south_east_led, south_west_led])
+        self.update()
 
 
 # Pull in GUI information and pair with code.
@@ -921,6 +1365,45 @@ class UserWindow(qtw.QMainWindow, Ui_MainWindow):
 
         # Manage the selection options in the serial number combo box
         self.CM = ConfigurationManager(self.serialNumberSelect)
+        # Initialize the status LED to blink the front panel as a heartbeat
+        self.swStatusLED = ToggleSwitch("DigitalOutput", "HUB0", 1, 3)
+        self.heartbeat = qtc.QTimer()
+        self.heartbeat.timeout.connect(self.beat)
+        self.heartbeat.start(1000)
+        self.b_heartBeat.pressed.connect(self.myocardial_infarction)
+        self.b_heartBeat.released.connect(self.defibrillation)
+        self.offline = True
+
+        # Initialize LED Brightness Command Voltage (Phidget Channel Qty: 4)
+        self.NorthWestLEDcmd = VariableVoltageSource("VoltageOutput", "HUB1", 4, 0)
+        self.NorthEastLEDcmd = VariableVoltageSource("VoltageOutput", "HUB1", 1, 0)
+        self.SouthEastLEDcmd = VariableVoltageSource("VoltageOutput", "HUB1", 3, 0)
+        self.SouthWestLEDcmd = VariableVoltageSource("VoltageOutput", "HUB1", 2, 0)
+
+        # Pair LED with GUI Slider Bar
+        self.NorthWestLED = LightEmittingDiode(self.NorthWestLEDcmd, self.s_nw, "nw_led")
+        self.NorthEastLED = LightEmittingDiode(self.NorthEastLEDcmd, self.s_ne, "ne_led")
+        self.SouthEastLED = LightEmittingDiode(self.SouthEastLEDcmd, self.s_se, "se_led")
+        self.SouthWestLED = LightEmittingDiode(self.SouthWestLEDcmd, self.s_sw, "sw_led")
+
+        # Switch which enables power to the LED drivers
+        self.swEnableLEDs = ToggleSwitch("DigitalOutput", "HUB0", 1, 2)
+
+        # Pair All LED Controls
+        self.LightControl = CameraLighting(self.NorthWestLED, self.NorthEastLED, self.SouthEastLED, self.SouthWestLED,
+                                           self.s_group_intensity, self.b_setMinBrightnessLED,
+                                           self.b_resetMinimumBrightnessLED, self.b_enableLEDs, self.swEnableLEDs,
+                                           self.nw_edit, self.ne_edit, self.se_edit, self.sw_edit, self.apply_min_sp)
+        self.LightControl.updated_minimum_brightness.connect(self.CM.updateConfigurationForLEDs)
+
+        self.simulated_joystick = LightJoystickWidget(self.lightWidget)
+        self.simulated_joystick.light_state_updated.connect(lambda val: self.LightControl.update_LEDs_from_gamepad(val))
+
+        # Initialize switch for camera power, link button press to power toggle, link button color to signal
+        self.swCameraPWR = ToggleSwitch("DigitalOutput", "HUB0", 5, 1)
+        self.b_cameraPower.clicked.connect(self.swCameraPWR.toggle)
+        self.swCameraPWR.switch_updated.connect(lambda val: self.update_camera_power_status(val))
+
 
         # Connect the Phidgets which sense motor current
         self.current_non_channel_1A = CurrentFeedback("VoltageInput", "HUB2", 4, 0)
@@ -929,7 +1412,6 @@ class UserWindow(qtw.QMainWindow, Ui_MainWindow):
         self.current_tilt_2B = CurrentFeedback("VoltageInput", "HUB2", 2, 0)
 
         # Connect signals for updated motor current to the GUI labels
-        # TODO channel and non-channel might need to be flipped
         self.current_non_channel_1A.current_updated.connect(lambda current: self.update_gui_current(current, "1A"))
         self.current_channel_side_1B.current_updated.connect(lambda current: self.update_gui_current(current, "1B"))
         self.current_pan_2A.current_updated.connect(lambda current: self.update_gui_current(current, "2A"))
@@ -955,6 +1437,8 @@ class UserWindow(qtw.QMainWindow, Ui_MainWindow):
 
         self.gamepad.gamepad_connected.connect(lambda: print("Gamepad connected"))
         self.gamepad.gamepad_inactive.connect(lambda: print("Gamepad disconnected"))
+        self.gamepad.light_state_updated.connect(lambda val: self.LightControl.update_LEDs_from_gamepad(val))
+        self.gamepad.intensity_state_updated.connect(lambda val: self.LightControl.updateSetPoint(val))
 
         # Initialize the motors with their v_cmd and current feedback
         self.motor_non_channel = Motor(self.current_non_channel_1A, self.mtrCmd_non_channel_1A, "1A")
@@ -980,21 +1464,223 @@ class UserWindow(qtw.QMainWindow, Ui_MainWindow):
         self.b_rotateCW.released.connect(lambda: self.stop_multi_jog())
         self.b_rotateCCW.released.connect(lambda: self.stop_multi_jog())
 
-        self.swLogic = Phidget("DigitalOutput", "HUB0", 1, 0)
-        self.swBus = Phidget("DigitalOutput", "HUB0", 5, 3)
-        self.swEnable = Phidget("DigitalOutput", "HUB0", 1, 1)
+        self.swLogic = ToggleSwitch("DigitalOutput", "HUB0", 1, 0)
+        self.swBus = ToggleSwitch("DigitalOutput", "HUB0", 5, 3)
+        self.swEnable = ToggleSwitch("DigitalOutput", "HUB0", 1, 1)
 
-        self.enable = EnableMotors(self.motor_non_channel, self.motor_channel_side, self.swLogic, self.swBus,
-                                   self.swEnable)
-        self.b_cameraPower.pressed.connect(lambda: self.enable.enable_motor())
-        self.b_near.pressed.connect(lambda: self.enable.disable_motors())
+        self.enable = EnableMotors(self.motor_non_channel, self.motor_channel_side, self.swBus, self.swEnable)
+        self.enable.drive_enabled.connect(lambda val: self.update_enable_button(val))
+        self.enable.enable_validated.connect(lambda val: self.update_enable_button(val))
+        self.b_enable.pressed.connect(lambda: self.enable.enable_motors())
+
         self.b_wide.pressed.connect(lambda: self.over_current.emit())
+
+        # Load the LED settings from the configuration file
+        self.LightControl.initLighting()
+
+        self.cabinet_power = DigitalSense("DigitalInput", "HUB0", 0, 0)
+        self.cabinet_power.sensor_updated.connect(lambda val: self.update_cabinet_power_status(val))
+
+        self.drive1fault = DigitalSense("DigitalInput", "HUB1", 0, 0)
+        self.drive1fault.sensor_updated.connect(lambda val: self.update_fault1_status(val))
+        self.b_drive1_fault.pressed.connect(self.reset_stage1)
+        self.drive2fault = DigitalSense("DigitalInput", "HUB1", 5, 0)
+        self.drive2fault.sensor_updated.connect(lambda val: self.update_fault2_status(val))
+        self.b_drive2_fault.pressed.connect(self.reset_stage1)
+
+        # Pair Thermocouples with Label on GUI (Phidget Channel Qty: 2)
+        self.temp_drive1 = Thermometer("TemperatureSensor", "HUB0", 4, 1)
+        self.temp_drive1.temperature_updated.connect(lambda val: self.l_tempDrive1.setText(val))
+        self.temp_drive1.temperature_updated.connect(lambda val: self.l_tempDrive1_e.setText(val))
+        self.temp_drive1.high_temp_warning.connect(lambda val, drive=1: self.high_temp_shutdown(val, drive))
+        self.temp_drive2 = Thermometer("TemperatureSensor", "HUB0", 4, 2)
+        self.temp_drive2.temperature_updated.connect(lambda val: self.l_tempDrive2.setText(val))
+        self.temp_drive2.temperature_updated.connect(lambda val: self.l_tempDrive2_e.setText(val))
+        self.temp_drive2.high_temp_warning.connect(lambda val, drive=2: self.high_temp_shutdown(val, drive))
+        self.high_temp1_warning_blinking = qtc.QTimer()
+        self.high_temp1_warning_blinking.timeout.connect(self.blink_drive1_temperature)
+        self.high_temp2_warning_blinking = qtc.QTimer()
+        self.high_temp2_warning_blinking.timeout.connect(self.blink_drive2_temperature)
+
+        # Connect movements of the temperature slider to update the temperature setpoint which causes an error
+        self.s_trip_temp.valueChanged.connect(lambda val: self.temp_drive1.update_warning_temperature(val))
+        self.s_trip_temp.setValue(120)  # Set default value to 120F
 
     # Method to allow for GUI to open first and then attempt to connect to Phidgets
     def open_phidgets(self):
         self.statusbar.showMessage("Opening Phidget Channels")
         for i in Phidget.instance_list:
             i.open()
+
+    # Change the background of the enable button based on the input
+    def update_enable_button(self, value):
+        if value == 1:
+            self.b_enable.setStyleSheet("background-color : green")
+        elif value == 0:
+            self.b_enable.setStyleSheet("background-color : light grey")
+        elif value == -1:
+            self.b_enable.setStyleSheet("background-color : red")
+
+    # Method which is called regularly to flash the front LED on the cabinet
+    def beat(self):
+        if not ((~Phidget.attached_phidgets) & Phidget.attached_phidgets_mask):
+            if self.swStatusLED.isAttached() and self.cabinet_power.sensor_state:
+                # Toggle and get the returned new LED state
+                rv = self.swStatusLED.toggle()
+                if rv == 1:
+                    self.b_heartBeat.setStyleSheet("background-color : green")
+                elif rv == 0:
+                    self.b_heartBeat.setStyleSheet("background-color : light grey")
+                    UserWindow.count += 1
+                else:
+                    # Phidget has just disconnected
+                    self.b_heartBeat.setStyleSheet("background-color : red")
+            else:
+                # Phidget is disconnected
+                self.b_heartBeat.setStyleSheet("background-color : red")
+
+            if self.offline:
+                text = "All " + str(Phidget.num_of_phidgets) + " Phidgets Channels Attached Successfully"
+                self.statusbar.showMessage(text, 5000)
+                self.b_enable.setEnabled(True)
+                self.offline = False
+
+        # All Phidgets are not attached, display error code
+        else:
+            self.statusbar.showMessage(
+                "Phidget Error Code (L->F): " + format(Phidget.attached_phidgets, "0" + str(Phidget.num_of_phidgets) + "b"))
+            if not self.offline:
+                self.b_heartBeat.setStyleSheet("background-color : red")
+                # Check Motor
+                # self.Enable.validateButtonColor()
+                # Check Camera Power
+                # self.CameraPWR.validateButtonColor()
+                # Check LED Power
+                self.LightControl.validateButtonColor()
+                # TODO: the above code validated the color status of the buttons. Ensure the same functionality has been programmed
+            self.offline = True
+
+    # Called when user presses and holds the heartbeat button to identify Cobra Commander
+    def myocardial_infarction(self):
+        self.b_heartBeat.setStyleSheet("background-color : green")
+        self.heartbeat.stop()
+        self.swStatusLED.switch_on()
+
+    # Called when user releases heartbeat button
+    def defibrillation(self):
+        self.b_heartBeat.setStyleSheet("background-color : light grey")
+        self.heartbeat.start(1000)
+
+    # Method to update the status of the cabinet power status
+    def update_cabinet_power_status(self, power_status):
+        if power_status:
+            self.l_cabinet_power.setText("ON")
+            self.l_cabinet_power.setStyleSheet("background-color : green")
+        else:
+            self.l_cabinet_power.setText("OFF")
+            self.l_cabinet_power.setStyleSheet("background-color : light grey")
+
+    # Method to update the status of the drive 1 fault
+    def update_fault1_status(self, fault1):
+        if fault1:
+            self.b_drive1_fault.setStyleSheet("background-color : red")
+        else:
+            self.b_drive1_fault.setStyleSheet("background-color : light grey")
+
+    # Method to update the status of the drive 2 fault
+    def update_fault2_status(self, fault2):
+        if fault2:
+            self.b_drive2_fault.setStyleSheet("background-color : red")
+        else:
+            self.b_drive2_fault.setStyleSheet("background-color : light grey")
+
+    def update_camera_power_status(self, status):
+        if status == 0:
+            self.b_cameraPower.setStyleSheet("background-color : light grey")
+        elif status == 1:
+            self.b_cameraPower.setStyleSheet("background-color : green")
+        elif status == -1:
+            self.b_cameraPower.setStyleSheet("background-color : red")
+
+    def reset_stage1(self):
+        self.enable.disable_motors()
+        self.disable_gui_buttons_for_reset()
+        text = "Waiting for bus voltage to dissipate"
+        self.statusbar.showMessage(text)
+        # Continue the reset after waiting for the bus voltage to dissipate
+        qtc.QTimer.singleShot(3000, self.reset_stage2)
+
+    def reset_stage2(self):
+        self.swLogic.switch_on()
+        text = "Resetting Drives"
+        self.statusbar.showMessage(text)
+        qtc.QTimer.singleShot(1000, self.reset_stage3)
+
+    def reset_stage3(self):
+        self.swLogic.switch_off()
+        self.enable_gui_buttons_from_reset()
+        text = "Reset Complete"
+        self.statusbar.showMessage(text, 3000)
+
+    def disable_gui_buttons_for_reset(self):
+        self.b_enable.setEnabled(False)
+        self.b_extend.setEnabled(False)
+        self.b_retract.setEnabled(False)
+        self.b_rotateCW.setEnabled(False)
+        self.b_rotateCCW.setEnabled(False)
+        self.b_pan_positive.setEnabled(False)
+        self.b_pan_negative.setEnabled(False)
+        self.b_tilt_positive.setEnabled(False)
+        self.b_tilt_negative.setEnabled(False)
+        self.b_drive1_fault.setEnabled(False)
+        self.b_drive2_fault.setEnabled(False)
+
+    def enable_gui_buttons_from_reset(self):
+        self.b_enable.setEnabled(True)
+        self.b_extend.setEnabled(True)
+        self.b_retract.setEnabled(True)
+        self.b_rotateCW.setEnabled(True)
+        self.b_rotateCCW.setEnabled(True)
+        self.b_pan_positive.setEnabled(True)
+        self.b_pan_negative.setEnabled(True)
+        self.b_tilt_positive.setEnabled(True)
+        self.b_tilt_negative.setEnabled(True)
+        self.b_drive1_fault.setEnabled(True)
+        self.b_drive2_fault.setEnabled(True)
+
+    # Method which is called when one of the drive temperatures has exceeded the setpoint
+    def high_temp_shutdown(self, fault, drive):
+        if fault:
+            self.enable.disable_motors()
+            self.disable_gui_buttons_for_reset()
+            if drive == 1:
+                print("Drive 1 is hot")
+                self.high_temp1_warning_blinking.start(1000)
+            elif drive == 2:
+                print("Drive 2 is hot")
+                self.high_temp2_warning_blinking.start(1000)
+        else:
+            if drive == 1:
+                print("Drive 1 is cool")
+                self.high_temp1_warning_blinking.stop()
+                self.l_tempDrive1.setStyleSheet("background-color : light grey")
+            elif drive == 2:
+                print("Drive 2 is cool")
+                self.high_temp2_warning_blinking.stop()
+                self.l_tempDrive2.setStyleSheet("background-color : light grey")
+            self.enable_gui_buttons_from_reset()
+
+    def blink_drive1_temperature(self):
+        if int(time.time()) % 2:
+            self.l_tempDrive1.setStyleSheet("background-color : light grey")
+        else:
+            self.l_tempDrive1.setStyleSheet("background-color : red")
+
+    def blink_drive2_temperature(self):
+        if int(time.time()) % 2:
+            self.l_tempDrive2.setStyleSheet("background-color : light grey")
+        else:
+            self.l_tempDrive2.setStyleSheet("background-color : red")
 
     # Method to add a + or - and update the motor current.
     def update_gui_current(self, value, label):
@@ -1061,7 +1747,6 @@ class UserWindow(qtw.QMainWindow, Ui_MainWindow):
         self.motor_channel_side.jog_cw(speed)
         self.motor_non_channel.jog_cw(speed)
 
-
     # Takes input from the gamepad where the motors can have different commanded speeds
     def shoulder_and_rotation_move(self, channel_side, non_channel):
         if channel_side < 0:
@@ -1077,6 +1762,7 @@ class UserWindow(qtw.QMainWindow, Ui_MainWindow):
             self.motor_non_channel.jog_cw(non_channel * self.s_joystick_speed.value() / 10)
         else:
             self.motor_non_channel.stop_jog()
+
 
 if __name__ == '__main__':
     app = qtw.QApplication([])

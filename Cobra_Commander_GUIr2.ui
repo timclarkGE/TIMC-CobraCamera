@@ -9,7 +9,7 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>573</width>
+    <width>794</width>
     <height>898</height>
    </rect>
   </property>
@@ -28,7 +28,7 @@
      <rect>
       <x>16</x>
       <y>6</y>
-      <width>533</width>
+      <width>759</width>
       <height>847</height>
      </rect>
     </property>
@@ -49,7 +49,7 @@
       <property name="geometry">
        <rect>
         <x>32</x>
-        <y>94</y>
+        <y>168</y>
         <width>191</width>
         <height>91</height>
        </rect>
@@ -113,8 +113,8 @@
        <rect>
         <x>32</x>
         <y>24</y>
-        <width>191</width>
-        <height>61</height>
+        <width>283</width>
+        <height>133</height>
        </rect>
       </property>
       <property name="title">
@@ -155,12 +155,48 @@
         </item>
        </layout>
       </widget>
+      <widget class="QLabel" name="l_cabinet_power">
+       <property name="geometry">
+        <rect>
+         <x>224</x>
+         <y>88</y>
+         <width>39</width>
+         <height>25</height>
+        </rect>
+       </property>
+       <property name="font">
+        <font>
+         <pointsize>12</pointsize>
+        </font>
+       </property>
+       <property name="text">
+        <string>OFF</string>
+       </property>
+      </widget>
+      <widget class="QLabel" name="label_10">
+       <property name="geometry">
+        <rect>
+         <x>26</x>
+         <y>84</y>
+         <width>179</width>
+         <height>31</height>
+        </rect>
+       </property>
+       <property name="font">
+        <font>
+         <pointsize>12</pointsize>
+        </font>
+       </property>
+       <property name="text">
+        <string>Cabinet Power:</string>
+       </property>
+      </widget>
      </widget>
      <widget class="QGroupBox" name="groupBox_2">
       <property name="geometry">
        <rect>
         <x>272</x>
-        <y>446</y>
+        <y>514</y>
         <width>231</width>
         <height>299</height>
        </rect>
@@ -173,7 +209,7 @@
         <rect>
          <x>30</x>
          <y>270</y>
-         <width>121</width>
+         <width>149</width>
          <height>16</height>
         </rect>
        </property>
@@ -184,7 +220,7 @@
       <widget class="QLabel" name="l_tempDrive2">
        <property name="geometry">
         <rect>
-         <x>150</x>
+         <x>184</x>
          <y>270</y>
          <width>35</width>
          <height>16</height>
@@ -395,7 +431,7 @@
       <property name="geometry">
        <rect>
         <x>32</x>
-        <y>386</y>
+        <y>454</y>
         <width>471</width>
         <height>41</height>
        </rect>
@@ -417,7 +453,7 @@
       <property name="geometry">
        <rect>
         <x>32</x>
-        <y>446</y>
+        <y>514</y>
         <width>221</width>
         <height>299</height>
        </rect>
@@ -626,7 +662,7 @@
         <rect>
          <x>30</x>
          <y>270</y>
-         <width>111</width>
+         <width>137</width>
          <height>16</height>
         </rect>
        </property>
@@ -637,7 +673,7 @@
       <widget class="QLabel" name="l_tempDrive1">
        <property name="geometry">
         <rect>
-         <x>150</x>
+         <x>174</x>
          <y>270</y>
          <width>35</width>
          <height>16</height>
@@ -652,7 +688,7 @@
       <property name="geometry">
        <rect>
         <x>32</x>
-        <y>332</y>
+        <y>400</y>
         <width>471</width>
         <height>20</height>
        </rect>
@@ -665,7 +701,7 @@
       <property name="geometry">
        <rect>
         <x>32</x>
-        <y>192</y>
+        <y>280</y>
         <width>337</width>
         <height>109</height>
        </rect>
@@ -749,10 +785,10 @@
      <widget class="QGroupBox" name="groupBox_4">
       <property name="geometry">
        <rect>
-        <x>252</x>
+        <x>344</x>
         <y>12</y>
-        <width>261</width>
-        <height>179</height>
+        <width>323</width>
+        <height>249</height>
        </rect>
       </property>
       <property name="title">
@@ -859,6 +895,98 @@
          </widget>
         </item>
        </layout>
+      </widget>
+      <widget class="QLabel" name="label_5">
+       <property name="geometry">
+        <rect>
+         <x>42</x>
+         <y>108</y>
+         <width>15</width>
+         <height>10</height>
+        </rect>
+       </property>
+       <property name="font">
+        <font>
+         <weight>75</weight>
+         <bold>true</bold>
+        </font>
+       </property>
+       <property name="text">
+        <string>NW</string>
+       </property>
+      </widget>
+      <widget class="QLabel" name="label_6">
+       <property name="geometry">
+        <rect>
+         <x>44</x>
+         <y>220</y>
+         <width>14</width>
+         <height>10</height>
+        </rect>
+       </property>
+       <property name="font">
+        <font>
+         <weight>75</weight>
+         <bold>true</bold>
+        </font>
+       </property>
+       <property name="text">
+        <string>SW</string>
+       </property>
+      </widget>
+      <widget class="QLabel" name="label_8">
+       <property name="geometry">
+        <rect>
+         <x>158</x>
+         <y>220</y>
+         <width>10</width>
+         <height>10</height>
+        </rect>
+       </property>
+       <property name="font">
+        <font>
+         <weight>75</weight>
+         <bold>true</bold>
+        </font>
+       </property>
+       <property name="text">
+        <string>SE</string>
+       </property>
+      </widget>
+      <widget class="QLabel" name="label_9">
+       <property name="geometry">
+        <rect>
+         <x>160</x>
+         <y>108</y>
+         <width>12</width>
+         <height>10</height>
+        </rect>
+       </property>
+       <property name="font">
+        <font>
+         <weight>75</weight>
+         <bold>true</bold>
+        </font>
+       </property>
+       <property name="text">
+        <string>NE</string>
+       </property>
+      </widget>
+      <widget class="QWidget" name="lightWidget" native="true">
+       <property name="geometry">
+        <rect>
+         <x>58</x>
+         <y>118</y>
+         <width>100</width>
+         <height>100</height>
+        </rect>
+       </property>
+       <property name="minimumSize">
+        <size>
+         <width>100</width>
+         <height>100</height>
+        </size>
+       </property>
       </widget>
      </widget>
     </widget>
@@ -1353,7 +1481,7 @@
       <property name="geometry">
        <rect>
         <x>384</x>
-        <y>190</y>
+        <y>214</y>
         <width>93</width>
         <height>28</height>
        </rect>
@@ -1361,6 +1489,119 @@
       <property name="text">
        <string>PushButton</string>
       </property>
+     </widget>
+     <widget class="QGroupBox" name="groupBox_11">
+      <property name="geometry">
+       <rect>
+        <x>410</x>
+        <y>62</y>
+        <width>247</width>
+        <height>145</height>
+       </rect>
+      </property>
+      <property name="title">
+       <string>Temperature Warning Trip Value</string>
+      </property>
+      <widget class="QSlider" name="s_trip_temp">
+       <property name="geometry">
+        <rect>
+         <x>14</x>
+         <y>36</y>
+         <width>111</width>
+         <height>16</height>
+        </rect>
+       </property>
+       <property name="minimum">
+        <number>50</number>
+       </property>
+       <property name="maximum">
+        <number>212</number>
+       </property>
+       <property name="value">
+        <number>50</number>
+       </property>
+       <property name="orientation">
+        <enum>Qt::Horizontal</enum>
+       </property>
+      </widget>
+      <widget class="QLabel" name="label_11">
+       <property name="geometry">
+        <rect>
+         <x>192</x>
+         <y>36</y>
+         <width>35</width>
+         <height>16</height>
+        </rect>
+       </property>
+       <property name="text">
+        <string>(F)</string>
+       </property>
+      </widget>
+      <widget class="QLabel" name="label_12">
+       <property name="geometry">
+        <rect>
+         <x>140</x>
+         <y>32</y>
+         <width>49</width>
+         <height>23</height>
+        </rect>
+       </property>
+       <property name="text">
+        <string>N/A</string>
+       </property>
+      </widget>
+      <widget class="QLabel" name="label_13">
+       <property name="geometry">
+        <rect>
+         <x>32</x>
+         <y>66</y>
+         <width>77</width>
+         <height>16</height>
+        </rect>
+       </property>
+       <property name="text">
+        <string>Drive 1:</string>
+       </property>
+      </widget>
+      <widget class="QLabel" name="label_14">
+       <property name="geometry">
+        <rect>
+         <x>32</x>
+         <y>102</y>
+         <width>75</width>
+         <height>16</height>
+        </rect>
+       </property>
+       <property name="text">
+        <string>Drive 2:</string>
+       </property>
+      </widget>
+      <widget class="QLabel" name="l_tempDrive1_e">
+       <property name="geometry">
+        <rect>
+         <x>114</x>
+         <y>66</y>
+         <width>35</width>
+         <height>19</height>
+        </rect>
+       </property>
+       <property name="text">
+        <string>(F)</string>
+       </property>
+      </widget>
+      <widget class="QLabel" name="l_tempDrive2_e">
+       <property name="geometry">
+        <rect>
+         <x>114</x>
+         <y>100</y>
+         <width>35</width>
+         <height>19</height>
+        </rect>
+       </property>
+       <property name="text">
+        <string>(F)</string>
+       </property>
+      </widget>
      </widget>
     </widget>
    </widget>
@@ -1370,7 +1611,7 @@
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>573</width>
+     <width>794</width>
      <height>18</height>
     </rect>
    </property>
@@ -1461,6 +1702,22 @@
     <hint type="destinationlabel">
      <x>87</x>
      <y>152</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>s_trip_temp</sender>
+   <signal>valueChanged(int)</signal>
+   <receiver>label_12</receiver>
+   <slot>setNum(int)</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>526</x>
+     <y>146</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>576</x>
+     <y>150</y>
     </hint>
    </hints>
   </connection>
