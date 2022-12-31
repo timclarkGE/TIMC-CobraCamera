@@ -721,6 +721,9 @@
        <layout class="QGridLayout" name="gridLayout_2">
         <item row="1" column="2">
          <widget class="QPushButton" name="b_wide">
+          <property name="enabled">
+           <bool>false</bool>
+          </property>
           <property name="toolTip">
            <string>Zoom Out</string>
           </property>
@@ -731,6 +734,9 @@
         </item>
         <item row="1" column="0">
          <widget class="QPushButton" name="b_manualSelect">
+          <property name="enabled">
+           <bool>false</bool>
+          </property>
           <property name="toolTip">
            <string>Toggle between manual/auto focus</string>
           </property>
@@ -741,6 +747,9 @@
         </item>
         <item row="1" column="1">
          <widget class="QPushButton" name="b_far">
+          <property name="enabled">
+           <bool>false</bool>
+          </property>
           <property name="toolTip">
            <string>Focus Far</string>
           </property>
@@ -751,6 +760,9 @@
         </item>
         <item row="0" column="2">
          <widget class="QPushButton" name="b_tele">
+          <property name="enabled">
+           <bool>false</bool>
+          </property>
           <property name="toolTip">
            <string>Zoom In</string>
           </property>
@@ -761,6 +773,9 @@
         </item>
         <item row="0" column="1">
          <widget class="QPushButton" name="b_near">
+          <property name="enabled">
+           <bool>false</bool>
+          </property>
           <property name="toolTip">
            <string>Focus Near</string>
           </property>
@@ -1387,6 +1402,9 @@
        <layout class="QGridLayout" name="gridLayout_3">
         <item row="0" column="0">
          <widget class="QPushButton" name="b_activate_full_auto_exposure_mode">
+          <property name="enabled">
+           <bool>false</bool>
+          </property>
           <property name="text">
            <string>Turn On AE Mode </string>
           </property>
@@ -1394,6 +1412,9 @@
         </item>
         <item row="0" column="1">
          <widget class="QPushButton" name="b_exp_comp_increase">
+          <property name="enabled">
+           <bool>false</bool>
+          </property>
           <property name="toolTip">
            <string>Increase exposure compensation</string>
           </property>
@@ -1404,6 +1425,9 @@
         </item>
         <item row="1" column="0">
          <widget class="QPushButton" name="b_exp_comp_reset">
+          <property name="enabled">
+           <bool>false</bool>
+          </property>
           <property name="toolTip">
            <string>Reset exposure compensation</string>
           </property>
@@ -1414,6 +1438,9 @@
         </item>
         <item row="1" column="1">
          <widget class="QPushButton" name="b_exp_comp_decrease">
+          <property name="enabled">
+           <bool>false</bool>
+          </property>
           <property name="toolTip">
            <string>Decrease exposure compensation</string>
           </property>
@@ -1439,6 +1466,9 @@
        <layout class="QGridLayout" name="gridLayout_4">
         <item row="1" column="1">
          <widget class="QPushButton" name="b_bright_mode_reset">
+          <property name="enabled">
+           <bool>false</bool>
+          </property>
           <property name="toolTip">
            <string>Reset brightness setting</string>
           </property>
@@ -1449,6 +1479,9 @@
         </item>
         <item row="0" column="1">
          <widget class="QPushButton" name="b_activate_bright_mode">
+          <property name="enabled">
+           <bool>false</bool>
+          </property>
           <property name="text">
            <string>Turn On Bright Mode</string>
           </property>
@@ -1456,6 +1489,9 @@
         </item>
         <item row="0" column="2">
          <widget class="QPushButton" name="b_bright_mode_increase">
+          <property name="enabled">
+           <bool>false</bool>
+          </property>
           <property name="toolTip">
            <string>Increase brightness setting</string>
           </property>
@@ -1466,6 +1502,9 @@
         </item>
         <item row="1" column="2">
          <widget class="QPushButton" name="b_bright_mode_decrease">
+          <property name="enabled">
+           <bool>false</bool>
+          </property>
           <property name="toolTip">
            <string>Decrease brightness setting</string>
           </property>
@@ -1476,19 +1515,22 @@
         </item>
        </layout>
       </widget>
-     </widget>
-     <widget class="QPushButton" name="pushButton">
-      <property name="geometry">
-       <rect>
-        <x>384</x>
-        <y>214</y>
-        <width>93</width>
-        <height>28</height>
-       </rect>
-      </property>
-      <property name="text">
-       <string>PushButton</string>
-      </property>
+      <widget class="QPushButton" name="b_reset_camera">
+       <property name="enabled">
+        <bool>false</bool>
+       </property>
+       <property name="geometry">
+        <rect>
+         <x>304</x>
+         <y>70</y>
+         <width>93</width>
+         <height>28</height>
+        </rect>
+       </property>
+       <property name="text">
+        <string>Reset Camera</string>
+       </property>
+      </widget>
      </widget>
      <widget class="QGroupBox" name="groupBox_11">
       <property name="geometry">

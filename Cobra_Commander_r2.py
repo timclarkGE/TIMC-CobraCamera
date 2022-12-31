@@ -15,6 +15,17 @@ from Phidget22.Net import *
 from Phidget22.Devices.Log import *
 from Phidget22.LogLevel import *
 
+import xml.etree.ElementTree as ET
+import sys
+import win32pipe, win32file, pywintypes
+
+wclient = r'\\.\pipe\vhclient' if sys.platform == 'win32' else '/tmp/vhclient'
+rclient = r'\\.\pipe\vhclient' if sys.platform == 'win32' else '/tmp/vhclient_response'
+
+# USB to Serial Converter used to send commands to camera P/N: TTL232RG-VSW5V0
+TTL232RG_VendorID = str(0x0403)
+TTL232RG_ProductID = str(0x6001)
+
 from XInput import *
 import time
 import math
@@ -73,12 +84,136 @@ def gamepad_stick_change(last_value, new_value):
         return 0
 
 
-class MyGamepadThread(qtc.QThread):
+# Class to contain methods for serial control of the camera
+class CameraControl(qtc.QObject):
+    serial_connected = qtc.pyqtSignal(bool)
+    error_message_created = qtc.pyqtSignal(str)
+
+    cmd_packets = {
+        "zoom_tele": b'\x81\x01\x04\x07\x26\xFF',
+        "zoom_wide": b'\x81\x01\x04\x07\x36\xFF',
+        "zoom_stop": b'\x81\x01\x04\x07\x00\xFF',
+        "focus_near": b'\x81\x01\x04\x08\x03\xFF',
+        "focus_far": b'\x81\x01\x04\x08\x02\xFF',
+        "focus_stop": b'\x81\x01\x04\x08\x00\xFF',
+        "focus_auto": b'\x81\x01\x04\x38\x02\xFF',
+        "focus_manual": b'\x81\x01\x04\x38\x03\xFF',
+        "full_auto": [b'\x81\x01\x04\x39\x00\xFF', b'\x81\x01\x04\x3E\x02\xFF'],
+        "inc_exp_comp": b'\x81\x01\x04\x0E\x02\xFF',
+        "dec_exp_comp": b'\x81\x01\x04\x0E\x03\xFF',
+        "exp_reset": b'\x81\x01\x04\x0E\x00\xFF',
+        "bright_mode": b'\x81\x01\x04\x39\x0D\xFF',
+        "bright_up": b'\x81\x01\x04\x0D\x02\xFF',
+        "bright_down": b'\x81\x01\x04\x0D\x03\xFF',
+        "bright_reset": b'\x81\x01\x04\x0D\x00\xFF',
+        "reset_cam": b'\x81\x01\x04\x19\x03\xFF',
+    }
+
+    def __init__(self):
+        super(CameraControl, self).__init__()
+        self.serial_port = serial.Serial()
+        self.serial_port.baudrate = 9600
+        self.port_name = "N/A"
+
+    # Virtual Here based method to start using a USB device connected to virtual here server
+    def useDevice(self, address):
+        devices = self.writeAndReadServer("USE," + address)
+        return devices
+
+    # Virtual Here based method to query the network for visible Virtual Here servers
+    def getClientState(self):
+        state = self.writeAndReadServer("get client state")
+        return state
+
+    # Main API call for Virtual Here which executes text based commands
+    def writeAndReadServer(self, IPCcommand):
+        IPCcommand = IPCcommand.encode() + b'\n'
+        handle = win32file.CreateFile(wclient, win32file.GENERIC_READ | win32file.GENERIC_WRITE, 0, None, win32file.OPEN_EXISTING,
+                                      win32file.FILE_ATTRIBUTE_NORMAL, None)
+        res = win32pipe.SetNamedPipeHandleState(handle, win32pipe.PIPE_READMODE_MESSAGE, None, None)
+        exitcode, buf = win32pipe.TransactNamedPipe(handle, IPCcommand, 15000, None)
+        buf = buf.decode()
+
+        return buf, exitcode
+
+    # Slot: Send commands to camera through the serial connection
+    def send_serial_cmd(self, cmd):
+        # Some actions require multiple serial commands that are in the form of a list
+        if self.serial_port.is_open:
+            if isinstance(self.cmd_packets[cmd], list):
+                for i in range(len(self.cmd_packets[cmd])):
+                    self.serial_port.write(self.cmd_packets[cmd][i])
+            # Single serial command is adequate for camera action
+            else:
+                self.serial_port.write(self.cmd_packets[cmd])
+
+    # Slot: Starts a serial connection with an ip address string as input
+    def start_serial(self, ip):
+        state = self.getClientState()
+        root = ET.fromstring(state[0])
+        host = "0.0.0.0."
+        if len(root) == 0:
+            print("No Servers Found -- Check Network")
+            sys.exit()
+        else:
+            connections = root.findall("./server/connection")
+            for child in connections:
+                if child.get("ip") == ip:
+                    host = child.get("serverName")
+                    usb_host = child.get("hostname")
+            devices = root.findall("./server/device")
+            for child in devices:
+                if child.get("serverName") == host:
+                    address = child.get("address")
+                    idVendor = child.get("idVendor")
+                    idProduct = child.get("idProduct")
+                    deviceState = child.get("state")
+                    # Check if the properties of the serial device connected matches the USB to Serial properties
+                    if idVendor == TTL232RG_VendorID and idProduct == TTL232RG_ProductID:
+                        connAddress = usb_host + "." + address
+                        # Device is ready for binding: state 1
+                        if deviceState == '1':
+                            result = self.useDevice(connAddress)
+                            if result[0] != "OK":
+                                print("Error Connecting to Serial Device")
+                            else:
+                                print("SLEEPING")
+                                time.sleep(3)  # Client software needs time for initialization
+                                state = self.getClientState()
+                                root = ET.fromstring(state[0])
+                                if len(root) == 0:
+                                    print("No Servers Found -- Check Network")
+                                    sys.exit()
+                                else:
+                                    devices = root.findall("./server/device")
+                                    for child in devices:
+                                        if child.get("serverName") == host and child.get("state") == '3':
+                                            self.port_name = child.get("comPortName")
+                                            print("SUCCESSFULLY connected to serial adapter. Port is: " + self.port_name)
+                    # Device state 3 is for connection already existing
+                    if deviceState == '3':
+                        self.port_name = child.get("comPortName")
+                        print("Already connected to port: " + self.port_name)
+
+        if self.port_name != "N/A":
+            try:
+                self.serial_port.port = self.port_name
+                self.serial_port.open()
+            except serial.SerialException:
+                print("ERROR Serial")
+                self.error_message_created.emit("Error Connecting to serial port:" + self.port_name)
+
+        # Emit true or false if the serial is connected
+        self.serial_connected.emit(self.serial_port.is_open)
+
+
+# TODO: add camera functionality TIMC
+class GamepadControls(qtc.QObject):
     # Signals
     gamepad_inactive = qtc.pyqtSignal()
     gamepad_connected = qtc.pyqtSignal()
     # refresh_wait = 0.025  # with a slow computer this value can cause lag with joystick inputs
-    refresh_wait = 0.05
+    refresh_wait = 50
 
     multi_stopped = qtc.pyqtSignal()
     multiple_axes_moved = qtc.pyqtSignal(float, float)
@@ -91,12 +226,19 @@ class MyGamepadThread(qtc.QThread):
     light_state_updated = qtc.pyqtSignal(list)  # NW, NE, SE, SW
     intensity_state_updated = qtc.pyqtSignal(float)
 
+    zoomed_tele = qtc.pyqtSignal()
+    zoomed_wide = qtc.pyqtSignal()
+    zoom_stopped = qtc.pyqtSignal()
+    focused_near = qtc.pyqtSignal()
+    focused_far = qtc.pyqtSignal()
+    focus_stopped = qtc.pyqtSignal()
+    focused_manual = qtc.pyqtSignal()
+    focused_auto = qtc.pyqtSignal()
+
     # def __init__(self, index_speed_signal, scan_speed_signal, enabled_index, enabled_scan):
-    def __init__(self, over_current_signal):
-        super(MyGamepadThread, self).__init__()
+    def __init__(self):
+        super(GamepadControls, self).__init__()
         self.connected_last = tuple((False, False, False, False))
-        self.over_current_sig = over_current_signal
-        self.over_current_sig.connect(self.rumble_for_over_current)
 
         # State variables
         self.s_shoulder_extend_initial = False
@@ -135,175 +277,224 @@ class MyGamepadThread(qtc.QThread):
         self.s_last_left_button_click = 0
         self.light_state = 0  # 0: no light mode, 1: light vector, 2: light intensity
 
+        self.s_zoom_tele_pressed = False
+        self.s_zoom_tele_released = False
+
+        self.s_zoom_wide_pressed = False
+        self.s_zoom_wide_released = False
+
+        self.s_focus_near_pressed = False
+        self.s_focus_near_released = False
+
+        self.s_focus_far_pressed = False
+        self.s_focus_far_released = False
+
+        self.s_manual_focus = False
+        self.s_auto_focus = False
+
+
         self.btn_state_last = None
         self.thumb_state_last = None
         self.trigger_state_last = None
 
+        # Set a time which runs the main loop which gathers data about the gamepad
+        self.timer = qtc.QTimer()
+        self.timer.timeout.connect(self.main_loop)
+        self.timer.start(self.refresh_wait)
+
+    # TODO: fix this slot
+    # Slot: TODO link this to actual overcurrent event
     def rumble_for_over_current(self):
+        time.sleep(5)
         print(get_connected().index(True))
         print(set_vibration(get_connected().index(True), 50000, 50000))
 
-    def run(self):
-        while True:
-            time.sleep(self.refresh_wait)
-            query_connections = get_connected()
-            # This loop won't gather information if there is not exactly one gamepad connected
-            if query_connections.count(True) == 1:
-                index = query_connections.index(True)
-                state = get_state(index)
+    def main_loop(self):
+        query_connections = get_connected()
+        # This loop won't gather information if there is not exactly one gamepad connected
+        if query_connections.count(True) == 1:
+            index = query_connections.index(True)
+            state = get_state(index)
 
-                btn_state = get_button_values(state)
-                thumb_state = get_thumb_values(state)
-                trigger_state = get_trigger_values(state)
+            btn_state = get_button_values(state)
+            thumb_state = get_thumb_values(state)
+            trigger_state = get_trigger_values(state)
 
-                # Define the different stick values
-                left_stick_x = thumb_state[0][0]
-                left_stick_y = thumb_state[0][1]
-                right_stick_x = thumb_state[1][0]
-                right_stick_y = thumb_state[1][1]
-                # Check if this is the first iteration of the loop and pass
-                if self.btn_state_last is not None and self.thumb_state_last is not None and self.trigger_state_last is not None:
-                    # Define the last stick values
-                    left_stick_last_x = self.thumb_state_last[0][0]
-                    left_stick_last_y = self.thumb_state_last[0][1]
-                    right_stick_last_x = self.thumb_state_last[1][0]
-                    right_stick_last_y = self.thumb_state_last[1][1]
+            # Define the different stick values
+            left_stick_x = thumb_state[0][0]
+            left_stick_y = thumb_state[0][1]
+            right_stick_x = thumb_state[1][0]
+            right_stick_y = thumb_state[1][1]
+            # Check if this is the first iteration of the loop and pass
+            if self.btn_state_last is not None and self.thumb_state_last is not None and self.trigger_state_last is not None:
+                # Define the last stick values
+                left_stick_last_x = self.thumb_state_last[0][0]
+                left_stick_last_y = self.thumb_state_last[0][1]
+                right_stick_last_x = self.thumb_state_last[1][0]
+                right_stick_last_y = self.thumb_state_last[1][1]
 
-                    # Check for initial movement: return 1 if initial movement is positive, return -1 if initial move
-                    # is negative
-                    x_init_left = initial_gamepad_stick_change(left_stick_last_x, left_stick_x)
-                    y_init_left = initial_gamepad_stick_change(left_stick_last_y, left_stick_y)
-                    x_init_right = initial_gamepad_stick_change(right_stick_last_x, right_stick_x)
-                    y_init_right = initial_gamepad_stick_change(right_stick_last_y, right_stick_y)
+                # Check for initial movement: return 1 if initial movement is positive, return -1 if initial move
+                # is negative
+                x_init_left = initial_gamepad_stick_change(left_stick_last_x, left_stick_x)
+                y_init_left = initial_gamepad_stick_change(left_stick_last_y, left_stick_y)
+                x_init_right = initial_gamepad_stick_change(right_stick_last_x, right_stick_x)
+                y_init_right = initial_gamepad_stick_change(right_stick_last_y, right_stick_y)
 
-                    # Check for final movement: return 1 if final movement was from positive value, return -1 if final
-                    # movement was from negative
-                    x_final_left = final_gamepad_stick_change(left_stick_last_x, left_stick_x)
-                    y_final_left = final_gamepad_stick_change(left_stick_last_y, left_stick_y)
-                    x_final_right = final_gamepad_stick_change(right_stick_last_x, right_stick_x)
-                    y_final_right = final_gamepad_stick_change(right_stick_last_y, right_stick_y)
+                # Check for final movement: return 1 if final movement was from positive value, return -1 if final
+                # movement was from negative
+                x_final_left = final_gamepad_stick_change(left_stick_last_x, left_stick_x)
+                y_final_left = final_gamepad_stick_change(left_stick_last_y, left_stick_y)
+                x_final_right = final_gamepad_stick_change(right_stick_last_x, right_stick_x)
+                y_final_right = final_gamepad_stick_change(right_stick_last_y, right_stick_y)
 
-                    # Check for: Position Change Not From Zero (pcnfz)
-                    x_pcnfz_left = gamepad_stick_change(left_stick_last_x, left_stick_x)
-                    y_pcnfz_left = gamepad_stick_change(left_stick_last_y, left_stick_y)
-                    x_pcnfz_right = gamepad_stick_change(right_stick_last_x, right_stick_x)
-                    y_pcnfz_right = gamepad_stick_change(right_stick_last_y, right_stick_y)
+                # Check for: Position Change Not From Zero (pcnfz)
+                x_pcnfz_left = gamepad_stick_change(left_stick_last_x, left_stick_x)
+                y_pcnfz_left = gamepad_stick_change(left_stick_last_y, left_stick_y)
+                x_pcnfz_right = gamepad_stick_change(right_stick_last_x, right_stick_x)
+                y_pcnfz_right = gamepad_stick_change(right_stick_last_y, right_stick_y)
 
-                    # Get state of the left button to determine how the left joystick input should be interpreted
-                    self.s_left_button = btn_state["LEFT_THUMB"]
+                # Check for camera zoom tele command
+                if btn_state["START"] != self.btn_state_last["START"]:
+                    if btn_state["START"]:
+                        self.zoomed_tele.emit()
+                    else:
+                        self.zoom_stopped.emit()
 
-                    # Button was just clicked, record time
-                    if self.s_left_button and not self.btn_state_last["LEFT_THUMB"]:
-                        self.s_last_left_button_click = time.time()
-                    # Button was just released
-                    elif not self.s_left_button and self.btn_state_last["LEFT_THUMB"]:
-                        # Check if short click which means go back one state, or enter light vector mode from state 0
-                        if 0 < (time.time() - self.s_last_left_button_click) <= 1.5:
-                            # Check if in light vector mode
-                            if not self.light_state:
-                                print("Entered Vector Mode")
-                                set_vibration(index, 20000, 20000)
-                                self.light_state = 1
-                                self.deactivate_shoulder_and_rotation_axes()
-                            elif self.light_state == 1:
-                                print("Exited light mode")
-                                set_vibration(index, 0, 0)
-                                self.light_state = 0
-                            elif self.light_state == 2:
-                                print("Exiting light intensity mode to light vector mode")
-                                set_vibration(index, 20000, 20000)
-                                self.light_state = 1
-                        # Long press enters light intensity mode
-                        elif 1.5 < (time.time() - self.s_last_left_button_click) < 6:
-                            self.light_state = 2
-                            print("Entered Light Intensity Mode")
-                            set_vibration(index, 30000, 30000)
+                # Check for camera zoom wide command
+                if btn_state["BACK"] != self.btn_state_last["BACK"]:
+                    if btn_state["BACK"]:
+                        self.zoomed_wide.emit()
+                    else:
+                        self.zoom_stopped.emit()
+
+                # Check for camera focus near command
+                if btn_state["LEFT_SHOULDER"] != self.btn_state_last["LEFT_SHOULDER"]:
+                    if btn_state["LEFT_SHOULDER"]:
+                        self.focused_near.emit()
+                    else:
+                        self.focus_stopped.emit()
+
+                # Check for camera focus far command
+                if btn_state["RIGHT_SHOULDER"] != self.btn_state_last["RIGHT_SHOULDER"]:
+                    if btn_state["RIGHT_SHOULDER"]:
+                        self.focused_far.emit()
+                    else:
+                        self.focus_stopped.emit()
+                # Get state of the left button to determine how the left joystick input should be interpreted
+                self.s_left_button = btn_state["LEFT_THUMB"]
+
+                # Button was just clicked, record time
+                if self.s_left_button and not self.btn_state_last["LEFT_THUMB"]:
+                    self.s_last_left_button_click = time.time()
+                # Button was just released
+                elif not self.s_left_button and self.btn_state_last["LEFT_THUMB"]:
+                    # Check if short click which means go back one state, or enter light vector mode from state 0
+                    if 0 < (time.time() - self.s_last_left_button_click) <= 1.5:
+                        # Check if in light vector mode
+                        if not self.light_state:
+                            print("Entered Vector Mode")
+                            set_vibration(index, 20000, 20000)
+                            self.light_state = 1
                             self.deactivate_shoulder_and_rotation_axes()
+                        elif self.light_state == 1:
+                            print("Exited light mode")
+                            set_vibration(index, 0, 0)
+                            self.light_state = 0
+                        elif self.light_state == 2:
+                            print("Exiting light intensity mode to light vector mode")
+                            set_vibration(index, 20000, 20000)
+                            self.light_state = 1
+                    # Long press enters light intensity mode
+                    elif 1.5 < (time.time() - self.s_last_left_button_click) < 6:
+                        self.light_state = 2
+                        print("Entered Light Intensity Mode")
+                        set_vibration(index, 30000, 30000)
+                        self.deactivate_shoulder_and_rotation_axes()
 
-                    # If no light state active, set state variables for shoulder and rotation axes
-                    if not self.light_state:
-                        self.process_if_move("shoulder", y_init_left, y_final_left, y_pcnfz_left, left_stick_y)
-                        self.process_if_move("rotation", x_init_left, x_final_left, x_pcnfz_left, left_stick_x)
-                    # Light vector mode
-                    elif self.light_state == 1:
-                        # Update the brightness of the LEDs if there is an initial, final, or position change of the left joystick
-                        if x_init_left or y_init_left or x_final_left or y_final_left or x_pcnfz_left or y_pcnfz_left:
-                            self.throw_light(left_stick_x, left_stick_y)
-                    elif self.light_state == 2:
-                        if y_init_left or y_final_left or y_pcnfz_left:
-                            self.intensity_state_updated.emit(left_stick_y)
+                # If no light state active, set state variables for shoulder and rotation axes
+                if not self.light_state:
+                    self.process_if_move("shoulder", y_init_left, y_final_left, y_pcnfz_left, left_stick_y)
+                    self.process_if_move("rotation", x_init_left, x_final_left, x_pcnfz_left, left_stick_x)
+                # Light vector mode
+                elif self.light_state == 1:
+                    # Update the brightness of the LEDs if there is an initial, final, or position change of the left joystick
+                    if x_init_left or y_init_left or x_final_left or y_final_left or x_pcnfz_left or y_pcnfz_left:
+                        self.throw_light(left_stick_x, left_stick_y)
+                elif self.light_state == 2:
+                    if y_init_left or y_final_left or y_pcnfz_left:
+                        self.intensity_state_updated.emit(left_stick_y)
 
-                    # Set the state variables of pan and tilt regardless
-                    self.process_if_move("pan", x_init_right, x_final_right, x_pcnfz_right, right_stick_x)
-                    self.process_if_move("tilt", y_init_right, y_final_right, y_pcnfz_right, right_stick_y)
+                # Set the state variables of pan and tilt regardless
+                self.process_if_move("pan", x_init_right, x_final_right, x_pcnfz_right, right_stick_x)
+                self.process_if_move("tilt", y_init_right, y_final_right, y_pcnfz_right, right_stick_y)
 
-                    # If shoulder or rotation not stationary, then prepare to apply new motor commands
-                    if not self.s_shoulder_stationary or not self.s_rotation_stationary:
-                        self.multi_axis_movement(left_stick_x, left_stick_y)
-                        self.stationary_flag_set = False
+                # If shoulder or rotation not stationary, then prepare to apply new motor commands
+                if not self.s_shoulder_stationary or not self.s_rotation_stationary:
+                    self.multi_axis_movement(left_stick_x, left_stick_y)
+                    self.stationary_flag_set = False
 
-                    # If shoulder and rotation are stationary, then send the stop command unless it has been previously set
-                    if self.s_shoulder_stationary and self.s_rotation_stationary:
-                        if not self.stationary_flag_set:
-                            self.multi_stopped.emit()
-                            self.stationary_flag_set = True
+                # If shoulder and rotation are stationary, then send the stop command unless it has been previously set
+                if self.s_shoulder_stationary and self.s_rotation_stationary:
+                    if not self.stationary_flag_set:
+                        self.multi_stopped.emit()
+                        self.stationary_flag_set = True
 
-                    # Check state variables for pan axis
-                    if self.s_pan_positive_initial:
-                        self.paned_positive.emit(right_stick_x)
-                    elif self.s_pan_negative_initial:
-                        self.paned_negative.emit(abs(right_stick_x))
-                    elif self.s_pan_positive_final or self.s_pan_negative_final:
+                # Check state variables for pan axis
+                if self.s_pan_positive_initial:
+                    self.paned_positive.emit(right_stick_x)
+                elif self.s_pan_negative_initial:
+                    self.paned_negative.emit(abs(right_stick_x))
+                elif self.s_pan_positive_final or self.s_pan_negative_final:
+                    self.pan_stopped.emit()
+                elif self.s_pan_speed_changed > 0:
+                    self.paned_positive.emit(right_stick_x)
+                    self.pan_stationary_flag_set = False
+                elif self.s_pan_speed_changed < 0:
+                    self.paned_negative.emit(abs(right_stick_x))
+                    self.pan_stationary_flag_set = False
+
+                if self.s_pan_stationary:
+                    if not self.pan_stationary_flag_set:
                         self.pan_stopped.emit()
-                    elif self.s_pan_speed_changed > 0:
-                        self.paned_positive.emit(right_stick_x)
-                        self.pan_stationary_flag_set = False
-                    elif self.s_pan_speed_changed < 0:
-                        self.paned_negative.emit(abs(right_stick_x))
-                        self.pan_stationary_flag_set = False
+                        self.pan_stationary_flag_set = True
 
-                    if self.s_pan_stationary:
-                        if not self.pan_stationary_flag_set:
-                            self.pan_stopped.emit()
-                            self.pan_stationary_flag_set = True
+                # Check state variables for tilt axis
+                if self.s_tilt_positive_initial:
+                    self.tilted_positive.emit(right_stick_y)
+                elif self.s_tilt_negative_initial:
+                    self.tilted_negative.emit(abs(right_stick_y))
+                elif self.s_tilt_positive_final or self.s_tilt_negative_final:
+                    self.tilt_stopped.emit()
+                elif self.s_tilt_speed_changed > 0:
+                    self.tilted_positive.emit(right_stick_y)
+                    self.tilt_stationary_flag_set = False
+                elif self.s_tilt_speed_changed < 0:
+                    self.tilted_negative.emit(abs(right_stick_y))
+                    self.tilt_stationary_flag_set = False
 
-                    # Check state variables for tilt axis
-                    if self.s_tilt_positive_initial:
-                        self.tilted_positive.emit(right_stick_y)
-                    elif self.s_tilt_negative_initial:
-                        self.tilted_negative.emit(abs(right_stick_y))
-                    elif self.s_tilt_positive_final or self.s_tilt_negative_final:
+                if self.s_tilt_stationary:
+                    if not self.tilt_stationary_flag_set:
                         self.tilt_stopped.emit()
-                    elif self.s_tilt_speed_changed > 0:
-                        self.tilted_positive.emit(right_stick_y)
-                        self.tilt_stationary_flag_set = False
-                    elif self.s_tilt_speed_changed < 0:
-                        self.tilted_negative.emit(abs(right_stick_y))
-                        self.tilt_stationary_flag_set = False
+                        self.tilt_stationary_flag_set = True
 
-                    if self.s_tilt_stationary:
-                        if not self.tilt_stationary_flag_set:
-                            self.tilt_stopped.emit()
-                            self.tilt_stationary_flag_set = True
+            self.thumb_state_last = thumb_state
+            self.btn_state_last = btn_state
+            self.trigger_state_last = trigger_state
 
-                self.thumb_state_last = thumb_state
-                self.btn_state_last = btn_state
-                self.trigger_state_last = trigger_state
+        # Check if gamepad was disconnected, stop movement. Also don't allow for multiple gamepads
+        if query_connections != self.connected_last:
+            new_count = query_connections.count(True)
+            if new_count != 1:
+                self.gamepad_inactive.emit()
+                self.deactivate_shoulder_and_rotation_axes()
+                self.deactivate_pan_tilt_axes()
+            else:
+                self.gamepad_connected.emit()
 
-            # Check if gamepad was disconnected, stop movement. Also don't allow for multiple gamepads
-            if query_connections != self.connected_last:
-                new_count = query_connections.count(True)
-                if new_count != 1:
-                    self.gamepad_inactive.emit()
-                    self.deactivate_shoulder_and_rotation_axes()
-                    self.deactivate_pan_tilt_axes()
-                else:
-                    self.gamepad_connected.emit()
+        self.connected_last = query_connections
 
-            self.connected_last = query_connections
-
-            # except:
-            #     print("# Problem with Gamepad")
+        # except:
+        #     print("# Problem with Gamepad")
 
     # Calculates the percentage of each LED to be on based on the left joystick position
     def throw_light(self, x, y):
@@ -1117,7 +1308,7 @@ class ConfigurationManager:
     # Called when user changes configuration from the combobox
     def changeConfiguration(self):
         new_index = self.comboBox.currentIndex()
-        mw.enable.disable_motors()  # TIMC
+        mw.motors.disable_motors()
         # mw.Enable.enterFailSafe()
         for i in Phidget.instance_list:
             i.close()
@@ -1137,7 +1328,7 @@ class ConfigurationManager:
         # TODO: validate button colors
         # mw.Enable.validateButtonColor()
         mw.LightControl.validateButtonColor()
-        mw.enable.validate()
+        mw.motors.validate()
         # mw.CameraPWR.validateButtonColor()
 
     # Update the configuration file with new LED settings
@@ -1215,8 +1406,8 @@ class Motor(qtc.QObject):
             self.sv_last_cmd_voltage = new_voltage_input
 
 
-# TODO: Revisit this method to make it better, Q: Why does the pan and tilt motors work fine and they aren't "enabled"
-class EnableMotors(qtc.QObject):
+# Class for motor control related to enabling and disabling the Varedan drives
+class Motors(qtc.QObject):
     drive_enabled = qtc.pyqtSignal(int)
     enable_validated = qtc.pyqtSignal(int)
 
@@ -1269,6 +1460,7 @@ class EnableMotors(qtc.QObject):
         else:
             self.enter_fail_safe()
 
+    # Fatal error in code logic attempt to shut down the motors
     def enter_fail_safe(self):
         if self.sw_enable.isAttached():
             self.sw_enable.switch_off()
@@ -1276,6 +1468,7 @@ class EnableMotors(qtc.QObject):
             self.sw_bus.switch_off()
         self.drive_enabled.emit(-1)
 
+    # Emit signals for GUI update to button color: Green = On (1), Grey = Off (0), Red = No communication (-1)
     def validate(self):
         self.state_sw_enable = self.sw_enable.grabState()
         self.state_sw_bus = self.sw_bus.grabState()
@@ -1358,6 +1551,12 @@ class LightJoystickWidget(qtw.QWidget):
 class UserWindow(qtw.QMainWindow, Ui_MainWindow):
     count = 0
     over_current = qtc.pyqtSignal()
+    focused_manual = qtc.pyqtSignal()
+    focused_auto = qtc.pyqtSignal()
+
+    start_serial_requested = qtc.pyqtSignal(str)
+    serial_cmd_requested = qtc.pyqtSignal(str)
+    stop_serial_requested = qtc.pyqtSignal()  # TODO create functionality
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -1404,7 +1603,6 @@ class UserWindow(qtw.QMainWindow, Ui_MainWindow):
         self.b_cameraPower.clicked.connect(self.swCameraPWR.toggle)
         self.swCameraPWR.switch_updated.connect(lambda val: self.update_camera_power_status(val))
 
-
         # Connect the Phidgets which sense motor current
         self.current_non_channel_1A = CurrentFeedback("VoltageInput", "HUB2", 4, 0)
         self.current_channel_side_1B = CurrentFeedback("VoltageInput", "HUB2", 5, 0)
@@ -1423,22 +1621,81 @@ class UserWindow(qtw.QMainWindow, Ui_MainWindow):
         self.mtrCmd_pan_2A = VariableVoltageSource("VoltageOutput", "HUB2", 1, 0)
         self.mtrCmd_tilt_2B = VariableVoltageSource("VoltageOutput", "HUB2", 0, 0)
 
-        self.gamepad = MyGamepadThread(self.over_current)
-        self.gamepad.paned_positive.connect(lambda val: self.jog_pan_positive(round(val * self.s_joystick_speed.value() / 10, 1)))
-        self.gamepad.paned_negative.connect(lambda val: self.jog_pan_negative(round(val * self.s_joystick_speed.value() / 10, 1)))
-        self.gamepad.pan_stopped.connect(lambda: self.stop_pan_jog())
-        self.gamepad.tilted_positive.connect(lambda val: self.jog_tilt_positive(round(val * self.s_joystick_speed.value() / 10, 1)))
-        self.gamepad.tilted_negative.connect(lambda val: self.jog_tilt_negative(round(val * self.s_joystick_speed.value() / 10, 1)))
-        self.gamepad.tilt_stopped.connect(lambda: self.stop_tilt_jog())
 
-        self.gamepad.multi_stopped.connect(lambda: self.stop_multi_jog())
-        self.gamepad.multiple_axes_moved.connect(lambda ch_side, non_ch: self.shoulder_and_rotation_move(ch_side, non_ch))
-        self.gamepad.start()
+        # Create a working class camera_control and assign it to a thread
+        self.camera_control = CameraControl()
+        self.camera_control_thread = qtc.QThread()
+        self.camera_control.moveToThread(self.camera_control_thread)
+        self.camera_control_thread.start()
 
-        self.gamepad.gamepad_connected.connect(lambda: print("Gamepad connected"))
-        self.gamepad.gamepad_inactive.connect(lambda: print("Gamepad disconnected"))
-        self.gamepad.light_state_updated.connect(lambda val: self.LightControl.update_LEDs_from_gamepad(val))
-        self.gamepad.intensity_state_updated.connect(lambda val: self.LightControl.updateSetPoint(val))
+        # Connect signals and slots related to camera control through serial
+        self.camera_control.serial_connected.connect(lambda val: self.process_serial_status(val))
+        self.start_serial_requested.connect(self.camera_control.start_serial)
+        self.serial_cmd_requested.connect(self.camera_control.send_serial_cmd)
+
+        # Dictionary of button press signals for camera functions. Dictionary key to be passed in emit signal
+        self.camera_signals_dictionary = {
+            "zoom_tele": self.b_tele.pressed,
+            "zoom_wide": self.b_wide.pressed,
+            "zoom_stop": [self.b_tele.released, self.b_wide.released],
+            "focus_near": self.b_near.pressed,
+            "focus_far": self.b_far.pressed,
+            "focus_stop": [self.b_near.released, self.b_far.released],
+            "focus_auto": self.focused_auto,
+            "focus_manual": self.focused_manual,
+            "full_auto": self.b_activate_full_auto_exposure_mode.pressed,
+            "inc_exp_comp": self.b_exp_comp_increase.pressed,
+            "dec_exp_comp": self.b_exp_comp_decrease.pressed,
+            "exp_reset": self.b_exp_comp_reset.pressed,
+            "bright_mode": self.b_activate_bright_mode.pressed,
+            "bright_up": self.b_bright_mode_increase.pressed,
+            "bright_down": self.b_bright_mode_decrease.pressed,
+            "bright_reset": self.b_bright_mode_reset.pressed,
+            "reset_cam": self.b_reset_camera.pressed,
+        }
+
+        # Iterate through the signal dictionary and connect the signals to the slot in the serial worker class
+        for key in self.camera_signals_dictionary:
+            if isinstance(self.camera_signals_dictionary[key], list):
+                for i in range(len(self.camera_signals_dictionary[key])):
+                    self.camera_signals_dictionary[key][i].connect(lambda val=key: self.serial_cmd_requested.emit(val))
+            else:
+                self.camera_signals_dictionary[key].connect(lambda val=key: self.serial_cmd_requested.emit(val))
+
+        self.b_manualSelect.clicked.connect(self.process_manual_select)
+
+        # Create a working class gamepad_control and assign it to a thread
+        self.gamepad_control = GamepadControls()
+        self.gamepad_control_thread = qtc.QThread()
+        self.gamepad_control.moveToThread(self.gamepad_control_thread)
+        self.gamepad_control_thread.start()
+
+        self.gamepad_control.paned_positive.connect(lambda val: self.jog_pan_positive(round(val * self.s_joystick_speed.value() / 10, 1)))
+        self.gamepad_control.paned_negative.connect(lambda val: self.jog_pan_negative(round(val * self.s_joystick_speed.value() / 10, 1)))
+        self.gamepad_control.pan_stopped.connect(lambda: self.stop_pan_jog())
+        self.gamepad_control.tilted_positive.connect(lambda val: self.jog_tilt_positive(round(val * self.s_joystick_speed.value() / 10, 1)))
+        self.gamepad_control.tilted_negative.connect(lambda val: self.jog_tilt_negative(round(val * self.s_joystick_speed.value() / 10, 1)))
+        self.gamepad_control.tilt_stopped.connect(lambda: self.stop_tilt_jog())
+
+        self.gamepad_control.multi_stopped.connect(lambda: self.stop_multi_jog())
+        self.gamepad_control.multiple_axes_moved.connect(lambda ch_side, non_ch: self.shoulder_and_rotation_move(ch_side, non_ch))
+
+        self.gamepad_control.gamepad_connected.connect(lambda: self.gamepad_connection.setStyleSheet("background-color : green"))
+        self.gamepad_control.gamepad_inactive.connect(lambda: self.gamepad_connection.setStyleSheet("background-color : light grey"))
+        self.gamepad_control.light_state_updated.connect(lambda val: self.LightControl.update_LEDs_from_gamepad(val))
+        self.gamepad_control.intensity_state_updated.connect(lambda val: self.LightControl.updateSetPoint(val))
+        self.gamepad_control.zoomed_tele.connect(self.b_tele.pressed)
+        self.gamepad_control.zoom_stopped.connect(self.b_tele.released)
+        self.gamepad_control.zoomed_wide.connect(self.b_wide.pressed)
+        self.gamepad_control.zoom_stopped.connect(self.b_wide.released)
+        self.gamepad_control.focused_near.connect(self.b_near.pressed)
+        self.gamepad_control.focus_stopped.connect(self.b_near.released)
+        self.gamepad_control.focused_far.connect(self.b_far.pressed)
+        self.gamepad_control.focus_stopped.connect(self.b_far.released)
+        #TODO add signals for auto and manual focus
+
+        self.over_current.connect(self.gamepad_control.rumble_for_over_current)
+        # self.b_wide.pressed.connect(lambda: self.over_current.emit())
 
         # Initialize the motors with their v_cmd and current feedback
         self.motor_non_channel = Motor(self.current_non_channel_1A, self.mtrCmd_non_channel_1A, "1A")
@@ -1468,12 +1725,11 @@ class UserWindow(qtw.QMainWindow, Ui_MainWindow):
         self.swBus = ToggleSwitch("DigitalOutput", "HUB0", 5, 3)
         self.swEnable = ToggleSwitch("DigitalOutput", "HUB0", 1, 1)
 
-        self.enable = EnableMotors(self.motor_non_channel, self.motor_channel_side, self.swBus, self.swEnable)
-        self.enable.drive_enabled.connect(lambda val: self.update_enable_button(val))
-        self.enable.enable_validated.connect(lambda val: self.update_enable_button(val))
-        self.b_enable.pressed.connect(lambda: self.enable.enable_motors())
+        self.motors = Motors(self.motor_non_channel, self.motor_channel_side, self.swBus, self.swEnable)
+        self.motors.drive_enabled.connect(lambda val: self.update_enable_button(val))
+        self.motors.enable_validated.connect(lambda val: self.update_enable_button(val))
+        self.b_enable.pressed.connect(lambda: self.motors.enable_motors())
 
-        self.b_wide.pressed.connect(lambda: self.over_current.emit())
 
         # Load the LED settings from the configuration file
         self.LightControl.initLighting()
@@ -1544,6 +1800,12 @@ class UserWindow(qtw.QMainWindow, Ui_MainWindow):
                 self.statusbar.showMessage(text, 5000)
                 self.b_enable.setEnabled(True)
                 self.offline = False
+                # Get IP address of a phidget channel on SBC.
+                usb_to_serial_ip_address = self.swCameraPWR.getServerPeerName().split(":")[0]
+                # Emit the signal which tells the serial thread to start a serial connection
+                self.start_serial_requested.emit(usb_to_serial_ip_address)
+
+
 
         # All Phidgets are not attached, display error code
         else:
@@ -1594,6 +1856,7 @@ class UserWindow(qtw.QMainWindow, Ui_MainWindow):
         else:
             self.b_drive2_fault.setStyleSheet("background-color : light grey")
 
+    # Change the color of the camera power button
     def update_camera_power_status(self, status):
         if status == 0:
             self.b_cameraPower.setStyleSheet("background-color : light grey")
@@ -1602,9 +1865,21 @@ class UserWindow(qtw.QMainWindow, Ui_MainWindow):
         elif status == -1:
             self.b_cameraPower.setStyleSheet("background-color : red")
 
+    # Process the user selecting the manual or auto focus
+    def process_manual_select(self):
+        if self.b_near.isEnabled():
+            self.b_near.setEnabled(False)
+            self.b_far.setEnabled(False)
+            self.focused_auto.emit()
+        else:
+            self.b_near.setEnabled(True)
+            self.b_far.setEnabled(True)
+            self.focused_manual.emit()
+
+    # Resetting the Varedan Amplifiers is a three step process: Step 1
     def reset_stage1(self):
-        self.enable.disable_motors()
-        self.disable_gui_buttons_for_reset()
+        self.motors.disable_motors()
+        self.enable_gui_buttons_related_to_motion(False)
         text = "Waiting for bus voltage to dissipate"
         self.statusbar.showMessage(text)
         # Continue the reset after waiting for the bus voltage to dissipate
@@ -1618,40 +1893,52 @@ class UserWindow(qtw.QMainWindow, Ui_MainWindow):
 
     def reset_stage3(self):
         self.swLogic.switch_off()
-        self.enable_gui_buttons_from_reset()
+        self.enable_gui_buttons_related_to_motion(True)
         text = "Reset Complete"
         self.statusbar.showMessage(text, 3000)
 
-    def disable_gui_buttons_for_reset(self):
-        self.b_enable.setEnabled(False)
-        self.b_extend.setEnabled(False)
-        self.b_retract.setEnabled(False)
-        self.b_rotateCW.setEnabled(False)
-        self.b_rotateCCW.setEnabled(False)
-        self.b_pan_positive.setEnabled(False)
-        self.b_pan_negative.setEnabled(False)
-        self.b_tilt_positive.setEnabled(False)
-        self.b_tilt_negative.setEnabled(False)
-        self.b_drive1_fault.setEnabled(False)
-        self.b_drive2_fault.setEnabled(False)
+    # Set GUI button enabled state related to axes motion
+    def enable_gui_buttons_related_to_motion(self, value):
+        if value:
+            state = True
+        else:
+            state = False
+        self.b_enable.setEnabled(state)
+        self.b_extend.setEnabled(state)
+        self.b_retract.setEnabled(state)
+        self.b_rotateCW.setEnabled(state)
+        self.b_rotateCCW.setEnabled(state)
+        self.b_pan_positive.setEnabled(state)
+        self.b_pan_negative.setEnabled(state)
+        self.b_tilt_positive.setEnabled(state)
+        self.b_tilt_negative.setEnabled(state)
+        self.b_drive1_fault.setEnabled(state)
+        self.b_drive2_fault.setEnabled(state)
 
-    def enable_gui_buttons_from_reset(self):
-        self.b_enable.setEnabled(True)
-        self.b_extend.setEnabled(True)
-        self.b_retract.setEnabled(True)
-        self.b_rotateCW.setEnabled(True)
-        self.b_rotateCCW.setEnabled(True)
-        self.b_pan_positive.setEnabled(True)
-        self.b_pan_negative.setEnabled(True)
-        self.b_tilt_positive.setEnabled(True)
-        self.b_tilt_negative.setEnabled(True)
-        self.b_drive1_fault.setEnabled(True)
-        self.b_drive2_fault.setEnabled(True)
+    def process_serial_status(self, status):
+        if status:
+            update = True
+        else:
+            update = False
+        self.b_manualSelect.setEnabled(update)
+        self.b_near.setEnabled(update)
+        self.b_far.setEnabled(update)
+        self.b_tele.setEnabled(update)
+        self.b_wide.setEnabled(update)
+        self.b_activate_bright_mode.setEnabled(update)
+        self.b_bright_mode_reset.setEnabled(update)
+        self.b_bright_mode_increase.setEnabled(update)
+        self.b_bright_mode_decrease.setEnabled(update)
+        self.b_activate_full_auto_exposure_mode.setEnabled(update)
+        self.b_exp_comp_reset.setEnabled(update)
+        self.b_exp_comp_increase.setEnabled(update)
+        self.b_exp_comp_decrease.setEnabled(update)
+        self.b_reset_camera.setEnabled(update)
 
     # Method which is called when one of the drive temperatures has exceeded the setpoint
     def high_temp_shutdown(self, fault, drive):
         if fault:
-            self.enable.disable_motors()
+            self.motors.disable_motors()
             self.disable_gui_buttons_for_reset()
             if drive == 1:
                 print("Drive 1 is hot")
