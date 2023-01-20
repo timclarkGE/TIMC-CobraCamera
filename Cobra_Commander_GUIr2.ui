@@ -9,8 +9,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>794</width>
-    <height>898</height>
+    <width>707</width>
+    <height>650</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -28,8 +28,8 @@
      <rect>
       <x>16</x>
       <y>6</y>
-      <width>759</width>
-      <height>847</height>
+      <width>683</width>
+      <height>615</height>
      </rect>
     </property>
     <property name="autoFillBackground">
@@ -45,76 +45,13 @@
      <attribute name="title">
       <string>CONTROL</string>
      </attribute>
-     <widget class="QGroupBox" name="groupBox_5">
-      <property name="geometry">
-       <rect>
-        <x>32</x>
-        <y>168</y>
-        <width>191</width>
-        <height>91</height>
-       </rect>
-      </property>
-      <property name="title">
-       <string>Gamepad Control</string>
-      </property>
-      <widget class="QWidget" name="verticalLayoutWidget">
-       <property name="geometry">
-        <rect>
-         <x>20</x>
-         <y>20</y>
-         <width>151</width>
-         <height>64</height>
-        </rect>
-       </property>
-       <layout class="QVBoxLayout" name="verticalLayout_6">
-        <item>
-         <widget class="QSlider" name="s_joystick_speed">
-          <property name="toolTip">
-           <string>Maximum speed for maximum joystick deflection.</string>
-          </property>
-          <property name="minimum">
-           <number>1</number>
-          </property>
-          <property name="maximum">
-           <number>100</number>
-          </property>
-          <property name="sliderPosition">
-           <number>50</number>
-          </property>
-          <property name="orientation">
-           <enum>Qt::Horizontal</enum>
-          </property>
-          <property name="tickPosition">
-           <enum>QSlider::TicksBelow</enum>
-          </property>
-         </widget>
-        </item>
-        <item>
-         <widget class="QPushButton" name="gamepad_connection">
-          <property name="enabled">
-           <bool>true</bool>
-          </property>
-          <property name="toolTip">
-           <string>Gamepad Connection: Green = Connected</string>
-          </property>
-          <property name="text">
-           <string>Gamepad Connection</string>
-          </property>
-          <property name="flat">
-           <bool>false</bool>
-          </property>
-         </widget>
-        </item>
-       </layout>
-      </widget>
-     </widget>
      <widget class="QGroupBox" name="groupBox_6">
       <property name="geometry">
        <rect>
-        <x>32</x>
-        <y>24</y>
-        <width>283</width>
-        <height>133</height>
+        <x>18</x>
+        <y>8</y>
+        <width>265</width>
+        <height>111</height>
        </rect>
       </property>
       <property name="title">
@@ -123,17 +60,17 @@
       <widget class="QWidget" name="horizontalLayoutWidget">
        <property name="geometry">
         <rect>
-         <x>10</x>
-         <y>20</y>
-         <width>175</width>
+         <x>14</x>
+         <y>24</y>
+         <width>237</width>
          <height>31</height>
         </rect>
        </property>
-       <layout class="QHBoxLayout" name="horizontalLayout_5">
+       <layout class="QHBoxLayout" name="horizontalLayout_5" stretch="0,2">
         <item>
          <widget class="QPushButton" name="b_heartBeat">
           <property name="toolTip">
-           <string>Flashing green when no connection errors. Click to help identify connected controller.</string>
+           <string>Flashing green when connected. Click to help identify connected controller.</string>
           </property>
           <property name="text">
            <string>Heartbeat</string>
@@ -149,7 +86,7 @@
            </sizepolicy>
           </property>
           <property name="toolTip">
-           <string>Select controller, if not listed parmeter file is not installed.</string>
+           <string>Select controller by serial number, if not listed parmeter file is not installed.</string>
           </property>
          </widget>
         </item>
@@ -158,10 +95,10 @@
       <widget class="QLabel" name="l_cabinet_power">
        <property name="geometry">
         <rect>
-         <x>224</x>
-         <y>88</y>
-         <width>39</width>
-         <height>25</height>
+         <x>212</x>
+         <y>74</y>
+         <width>34</width>
+         <height>24</height>
         </rect>
        </property>
        <property name="font">
@@ -176,10 +113,10 @@
       <widget class="QLabel" name="label_10">
        <property name="geometry">
         <rect>
-         <x>26</x>
-         <y>84</y>
-         <width>179</width>
-         <height>31</height>
+         <x>16</x>
+         <y>72</y>
+         <width>181</width>
+         <height>24</height>
         </rect>
        </property>
        <property name="font">
@@ -195,9 +132,9 @@
      <widget class="QGroupBox" name="groupBox_2">
       <property name="geometry">
        <rect>
-        <x>272</x>
-        <y>514</y>
-        <width>231</width>
+        <x>412</x>
+        <y>280</y>
+        <width>250</width>
         <height>299</height>
        </rect>
       </property>
@@ -207,9 +144,9 @@
       <widget class="QLabel" name="label_15">
        <property name="geometry">
         <rect>
-         <x>30</x>
+         <x>48</x>
          <y>270</y>
-         <width>149</width>
+         <width>112</width>
          <height>16</height>
         </rect>
        </property>
@@ -235,13 +172,13 @@
         <rect>
          <x>8</x>
          <y>16</y>
-         <width>216</width>
+         <width>235</width>
          <height>247</height>
         </rect>
        </property>
        <layout class="QVBoxLayout" name="verticalLayout_13">
         <item>
-         <layout class="QHBoxLayout" name="horizontalLayout_8">
+         <layout class="QHBoxLayout" name="horizontalLayout_8" stretch="5,1,0">
           <item>
            <layout class="QVBoxLayout" name="verticalLayout_17">
             <item>
@@ -284,7 +221,7 @@
                <string>Pan Motor Current (CH:2A)</string>
               </property>
               <property name="text">
-               <string>Current (A)</string>
+               <string>Current  (A)</string>
               </property>
               <property name="alignment">
                <set>Qt::AlignCenter</set>
@@ -325,7 +262,7 @@
          </widget>
         </item>
         <item>
-         <layout class="QHBoxLayout" name="horizontalLayout_6">
+         <layout class="QHBoxLayout" name="horizontalLayout_6" stretch="5,1,0">
           <item>
            <layout class="QVBoxLayout" name="verticalLayout_14">
             <item>
@@ -368,7 +305,7 @@
                <string>Tilt Motor Current (CH:2B)</string>
               </property>
               <property name="text">
-               <string>Current (A)</string>
+               <string>Current  (A)</string>
               </property>
               <property name="alignment">
                <set>Qt::AlignCenter</set>
@@ -430,10 +367,10 @@
       </property>
       <property name="geometry">
        <rect>
-        <x>32</x>
-        <y>454</y>
-        <width>471</width>
-        <height>41</height>
+        <x>18</x>
+        <y>286</y>
+        <width>127</width>
+        <height>293</height>
        </rect>
       </property>
       <property name="font">
@@ -452,9 +389,9 @@
      <widget class="QGroupBox" name="groupBox">
       <property name="geometry">
        <rect>
-        <x>32</x>
-        <y>514</y>
-        <width>221</width>
+        <x>156</x>
+        <y>280</y>
+        <width>250</width>
         <height>299</height>
        </rect>
       </property>
@@ -469,13 +406,13 @@
         <rect>
          <x>10</x>
          <y>20</y>
-         <width>201</width>
+         <width>233</width>
          <height>243</height>
         </rect>
        </property>
        <layout class="QVBoxLayout" name="verticalLayout_7">
         <item>
-         <layout class="QHBoxLayout" name="horizontalLayout">
+         <layout class="QHBoxLayout" name="horizontalLayout" stretch="5,1,0">
           <item>
            <layout class="QVBoxLayout" name="verticalLayout">
             <item>
@@ -515,10 +452,10 @@
             <item>
              <widget class="QLabel" name="l_current1A">
               <property name="toolTip">
-               <string>Channel Side Motor Current (CH:1A)</string>
+               <string>Non-Channel Side Motor Current (CH:1A)</string>
               </property>
               <property name="text">
-               <string>Current (A)</string>
+               <string>Current  (A)</string>
               </property>
               <property name="alignment">
                <set>Qt::AlignCenter</set>
@@ -559,7 +496,7 @@
          </widget>
         </item>
         <item>
-         <layout class="QHBoxLayout" name="horizontalLayout_2">
+         <layout class="QHBoxLayout" name="horizontalLayout_2" stretch="5,1,0">
           <item>
            <layout class="QVBoxLayout" name="verticalLayout_2">
             <item>
@@ -599,10 +536,10 @@
             <item>
              <widget class="QLabel" name="l_current1B">
               <property name="toolTip">
-               <string>Non Channel Side Motor Current (CH:1B)</string>
+               <string>Channel Side Motor Current (CH:1B)</string>
               </property>
               <property name="text">
-               <string>Current (A)</string>
+               <string>Current  (A)</string>
               </property>
               <property name="alignment">
                <set>Qt::AlignCenter</set>
@@ -660,9 +597,9 @@
       <widget class="QLabel" name="label_7">
        <property name="geometry">
         <rect>
-         <x>30</x>
+         <x>40</x>
          <y>270</y>
-         <width>137</width>
+         <width>112</width>
          <height>16</height>
         </rect>
        </property>
@@ -684,25 +621,12 @@
        </property>
       </widget>
      </widget>
-     <widget class="Line" name="line_2">
-      <property name="geometry">
-       <rect>
-        <x>32</x>
-        <y>400</y>
-        <width>471</width>
-        <height>20</height>
-       </rect>
-      </property>
-      <property name="orientation">
-       <enum>Qt::Horizontal</enum>
-      </property>
-     </widget>
      <widget class="QGroupBox" name="groupBox_3">
       <property name="geometry">
        <rect>
-        <x>32</x>
-        <y>280</y>
-        <width>337</width>
+        <x>292</x>
+        <y>168</y>
+        <width>371</width>
         <height>109</height>
        </rect>
       </property>
@@ -714,7 +638,7 @@
         <rect>
          <x>10</x>
          <y>20</y>
-         <width>295</width>
+         <width>343</width>
          <height>80</height>
         </rect>
        </property>
@@ -800,10 +724,10 @@
      <widget class="QGroupBox" name="groupBox_4">
       <property name="geometry">
        <rect>
-        <x>344</x>
-        <y>12</y>
-        <width>323</width>
-        <height>249</height>
+        <x>294</x>
+        <y>8</y>
+        <width>371</width>
+        <height>157</height>
        </rect>
       </property>
       <property name="title">
@@ -812,8 +736,8 @@
       <widget class="QWidget" name="verticalLayoutWidget_5">
        <property name="geometry">
         <rect>
-         <x>10</x>
-         <y>20</y>
+         <x>12</x>
+         <y>40</y>
          <width>191</width>
          <height>77</height>
         </rect>
@@ -914,10 +838,10 @@
       <widget class="QLabel" name="label_5">
        <property name="geometry">
         <rect>
-         <x>42</x>
-         <y>108</y>
-         <width>15</width>
-         <height>10</height>
+         <x>216</x>
+         <y>14</y>
+         <width>28</width>
+         <height>19</height>
         </rect>
        </property>
        <property name="font">
@@ -933,10 +857,10 @@
       <widget class="QLabel" name="label_6">
        <property name="geometry">
         <rect>
-         <x>44</x>
-         <y>220</y>
-         <width>14</width>
-         <height>10</height>
+         <x>216</x>
+         <y>130</y>
+         <width>26</width>
+         <height>19</height>
         </rect>
        </property>
        <property name="font">
@@ -952,10 +876,10 @@
       <widget class="QLabel" name="label_8">
        <property name="geometry">
         <rect>
-         <x>158</x>
-         <y>220</y>
-         <width>10</width>
-         <height>10</height>
+         <x>340</x>
+         <y>132</y>
+         <width>20</width>
+         <height>19</height>
         </rect>
        </property>
        <property name="font">
@@ -971,10 +895,10 @@
       <widget class="QLabel" name="label_9">
        <property name="geometry">
         <rect>
-         <x>160</x>
-         <y>108</y>
-         <width>12</width>
-         <height>10</height>
+         <x>340</x>
+         <y>14</y>
+         <width>22</width>
+         <height>19</height>
         </rect>
        </property>
        <property name="font">
@@ -990,8 +914,8 @@
       <widget class="QWidget" name="lightWidget" native="true">
        <property name="geometry">
         <rect>
-         <x>58</x>
-         <y>118</y>
+         <x>238</x>
+         <y>30</y>
          <width>100</width>
          <height>100</height>
         </rect>
@@ -1002,6 +926,120 @@
          <height>100</height>
         </size>
        </property>
+       <property name="toolTip">
+        <string>Virtual joystick to adjust LED brightness</string>
+       </property>
+      </widget>
+     </widget>
+     <widget class="QGroupBox" name="groupBox_5">
+      <property name="geometry">
+       <rect>
+        <x>18</x>
+        <y>130</y>
+        <width>261</width>
+        <height>147</height>
+       </rect>
+      </property>
+      <property name="title">
+       <string>Gamepad Control</string>
+      </property>
+      <widget class="QWidget" name="verticalLayoutWidget_8">
+       <property name="geometry">
+        <rect>
+         <x>16</x>
+         <y>24</y>
+         <width>231</width>
+         <height>102</height>
+        </rect>
+       </property>
+       <layout class="QVBoxLayout" name="verticalLayout_10">
+        <item>
+         <layout class="QHBoxLayout" name="horizontalLayout_7">
+          <item>
+           <layout class="QVBoxLayout" name="verticalLayout_6">
+            <item>
+             <widget class="QSlider" name="s_joystick_speed_sr">
+              <property name="toolTip">
+               <string>Maximum speed for maximum joystick deflection axis: Shoulder/Rotation</string>
+              </property>
+              <property name="minimum">
+               <number>1</number>
+              </property>
+              <property name="maximum">
+               <number>100</number>
+              </property>
+              <property name="sliderPosition">
+               <number>50</number>
+              </property>
+              <property name="orientation">
+               <enum>Qt::Horizontal</enum>
+              </property>
+              <property name="tickPosition">
+               <enum>QSlider::TicksBelow</enum>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QSlider" name="s_joystick_speed_pt">
+              <property name="toolTip">
+               <string>Maximum speed for maximum joystick deflection axis: Pan/Tilt</string>
+              </property>
+              <property name="minimum">
+               <number>1</number>
+              </property>
+              <property name="maximum">
+               <number>100</number>
+              </property>
+              <property name="sliderPosition">
+               <number>50</number>
+              </property>
+              <property name="orientation">
+               <enum>Qt::Horizontal</enum>
+              </property>
+              <property name="tickPosition">
+               <enum>QSlider::TicksBelow</enum>
+              </property>
+             </widget>
+            </item>
+           </layout>
+          </item>
+          <item>
+           <layout class="QVBoxLayout" name="verticalLayout_9">
+            <item>
+             <widget class="QLabel" name="label_17">
+              <property name="text">
+               <string>S/R</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QLabel" name="label_18">
+              <property name="text">
+               <string>P&amp;T</string>
+              </property>
+             </widget>
+            </item>
+           </layout>
+          </item>
+         </layout>
+        </item>
+        <item>
+         <widget class="QPushButton" name="gamepad_connection">
+          <property name="enabled">
+           <bool>true</bool>
+          </property>
+          <property name="toolTip">
+           <string>Gamepad Connection: Green = Connected</string>
+          </property>
+          <property name="text">
+           <string>Gamepad Connection</string>
+          </property>
+          <property name="flat">
+           <bool>false</bool>
+          </property>
+         </widget>
+        </item>
+       </layout>
       </widget>
      </widget>
     </widget>
@@ -1016,9 +1054,9 @@
       <property name="geometry">
        <rect>
         <x>22</x>
-        <y>18</y>
-        <width>293</width>
-        <height>246</height>
+        <y>156</y>
+        <width>333</width>
+        <height>319</height>
        </rect>
       </property>
       <property name="title">
@@ -1028,22 +1066,12 @@
        <property name="geometry">
         <rect>
          <x>54</x>
-         <y>14</y>
-         <width>174</width>
-         <height>121</height>
+         <y>24</y>
+         <width>228</width>
+         <height>132</height>
         </rect>
        </property>
        <layout class="QGridLayout" name="gridLayout">
-        <item row="0" column="1">
-         <widget class="QLabel" name="label_3">
-          <property name="text">
-           <string>NE LED</string>
-          </property>
-          <property name="alignment">
-           <set>Qt::AlignCenter</set>
-          </property>
-         </widget>
-        </item>
         <item row="1" column="0">
          <widget class="QSlider" name="s_nw">
           <property name="toolTip">
@@ -1078,6 +1106,16 @@
           </property>
          </widget>
         </item>
+        <item row="0" column="1">
+         <widget class="QLabel" name="label_3">
+          <property name="text">
+           <string>NE LED</string>
+          </property>
+          <property name="alignment">
+           <set>Qt::AlignCenter</set>
+          </property>
+         </widget>
+        </item>
         <item row="1" column="1">
          <widget class="QSlider" name="s_ne">
           <property name="toolTip">
@@ -1103,16 +1141,6 @@
           </property>
           <property name="tickPosition">
            <enum>QSlider::TicksBelow</enum>
-          </property>
-         </widget>
-        </item>
-        <item row="3" column="0">
-         <widget class="QLabel" name="label">
-          <property name="text">
-           <string>SW LED</string>
-          </property>
-          <property name="alignment">
-           <set>Qt::AlignCenter</set>
           </property>
          </widget>
         </item>
@@ -1182,6 +1210,16 @@
           </property>
          </widget>
         </item>
+        <item row="3" column="0">
+         <widget class="QLabel" name="label">
+          <property name="text">
+           <string>SW LED</string>
+          </property>
+          <property name="alignment">
+           <set>Qt::AlignCenter</set>
+          </property>
+         </widget>
+        </item>
         <item row="0" column="0">
          <widget class="QLabel" name="label_2">
           <property name="text">
@@ -1197,10 +1235,10 @@
       <widget class="QWidget" name="verticalLayoutWidget_2">
        <property name="geometry">
         <rect>
-         <x>14</x>
-         <y>54</y>
-         <width>35</width>
-         <height>41</height>
+         <x>10</x>
+         <y>52</y>
+         <width>38</width>
+         <height>71</height>
         </rect>
        </property>
        <layout class="QVBoxLayout" name="verticalLayout_5">
@@ -1229,10 +1267,10 @@
       <widget class="QWidget" name="verticalLayoutWidget_4">
        <property name="geometry">
         <rect>
-         <x>232</x>
-         <y>54</y>
-         <width>47</width>
-         <height>47</height>
+         <x>288</x>
+         <y>50</y>
+         <width>38</width>
+         <height>75</height>
         </rect>
        </property>
        <layout class="QVBoxLayout" name="verticalLayout_8">
@@ -1261,9 +1299,9 @@
       <widget class="QWidget" name="layoutWidget_2">
        <property name="geometry">
         <rect>
-         <x>60</x>
-         <y>144</y>
-         <width>202</width>
+         <x>64</x>
+         <y>162</y>
+         <width>211</width>
          <height>30</height>
         </rect>
        </property>
@@ -1271,7 +1309,7 @@
         <item>
          <widget class="QPushButton" name="b_setMinBrightnessLED">
           <property name="toolTip">
-           <string>Press this button when all LED's are at minimum brightness, use L/R arrow keys to set each LED</string>
+           <string>Press this button when all LED's are at minimum brightness, use L/R arrow keys to set each LED slider above</string>
           </property>
           <property name="text">
            <string>Set Minimum</string>
@@ -1312,11 +1350,14 @@
       <widget class="QLineEdit" name="se_edit">
        <property name="geometry">
         <rect>
-         <x>136</x>
-         <y>212</y>
+         <x>126</x>
+         <y>274</y>
          <width>63</width>
          <height>20</height>
         </rect>
+       </property>
+       <property name="toolTip">
+        <string>SE LED setting which will be saved when &quot;Apply&quot; is clicked</string>
        </property>
        <property name="text">
         <string>850</string>
@@ -1325,11 +1366,14 @@
       <widget class="QLineEdit" name="nw_edit">
        <property name="geometry">
         <rect>
-         <x>62</x>
-         <y>184</y>
+         <x>52</x>
+         <y>240</y>
          <width>63</width>
          <height>20</height>
         </rect>
+       </property>
+       <property name="toolTip">
+        <string>NW LED setting which will be saved when &quot;Apply&quot; is clicked</string>
        </property>
        <property name="text">
         <string>844</string>
@@ -1338,11 +1382,14 @@
       <widget class="QLineEdit" name="ne_edit">
        <property name="geometry">
         <rect>
-         <x>136</x>
-         <y>184</y>
+         <x>126</x>
+         <y>240</y>
          <width>63</width>
          <height>20</height>
         </rect>
+       </property>
+       <property name="toolTip">
+        <string>NE LED setting which will be saved when &quot;Apply&quot; is clicked</string>
        </property>
        <property name="text">
         <string>844</string>
@@ -1351,11 +1398,14 @@
       <widget class="QLineEdit" name="sw_edit">
        <property name="geometry">
         <rect>
-         <x>62</x>
-         <y>212</y>
+         <x>52</x>
+         <y>274</y>
          <width>63</width>
          <height>20</height>
         </rect>
+       </property>
+       <property name="toolTip">
+        <string>SW LED setting which will be saved when &quot;Apply&quot; is clicked</string>
        </property>
        <property name="text">
         <string>849</string>
@@ -1364,24 +1414,28 @@
       <widget class="QPushButton" name="apply_min_sp">
        <property name="geometry">
         <rect>
-         <x>222</x>
-         <y>202</y>
-         <width>56</width>
-         <height>21</height>
+         <x>206</x>
+         <y>244</y>
+         <width>85</width>
+         <height>47</height>
         </rect>
        </property>
+       <property name="toolTip">
+        <string>Saves the four left numbers to a configuration file</string>
+       </property>
        <property name="text">
-        <string>Apply</string>
+        <string>Apply
+LED Config</string>
        </property>
       </widget>
      </widget>
      <widget class="QGroupBox" name="groupBox_8">
       <property name="geometry">
        <rect>
-        <x>24</x>
-        <y>326</y>
-        <width>471</width>
-        <height>299</height>
+        <x>364</x>
+        <y>18</y>
+        <width>295</width>
+        <height>405</height>
        </rect>
       </property>
       <property name="title">
@@ -1390,130 +1444,198 @@
       <widget class="QGroupBox" name="groupBox_10">
        <property name="geometry">
         <rect>
-         <x>14</x>
-         <y>158</y>
-         <width>238</width>
-         <height>103</height>
+         <x>10</x>
+         <y>140</y>
+         <width>273</width>
+         <height>106</height>
         </rect>
        </property>
        <property name="title">
         <string>Auto Exposure Mode</string>
        </property>
-       <layout class="QGridLayout" name="gridLayout_3">
-        <item row="0" column="0">
-         <widget class="QPushButton" name="b_activate_full_auto_exposure_mode">
-          <property name="enabled">
-           <bool>false</bool>
-          </property>
-          <property name="text">
-           <string>Turn On AE Mode </string>
-          </property>
-         </widget>
-        </item>
-        <item row="0" column="1">
-         <widget class="QPushButton" name="b_exp_comp_increase">
-          <property name="enabled">
-           <bool>false</bool>
-          </property>
-          <property name="toolTip">
-           <string>Increase exposure compensation</string>
-          </property>
-          <property name="text">
-           <string>+</string>
-          </property>
-         </widget>
-        </item>
-        <item row="1" column="0">
-         <widget class="QPushButton" name="b_exp_comp_reset">
-          <property name="enabled">
-           <bool>false</bool>
-          </property>
-          <property name="toolTip">
-           <string>Reset exposure compensation</string>
-          </property>
-          <property name="text">
-           <string>Reset</string>
-          </property>
-         </widget>
-        </item>
-        <item row="1" column="1">
-         <widget class="QPushButton" name="b_exp_comp_decrease">
-          <property name="enabled">
-           <bool>false</bool>
-          </property>
-          <property name="toolTip">
-           <string>Decrease exposure compensation</string>
-          </property>
-          <property name="text">
-           <string>-</string>
-          </property>
-         </widget>
-        </item>
-       </layout>
+       <widget class="QPushButton" name="b_activate_full_auto_exposure_mode">
+        <property name="enabled">
+         <bool>false</bool>
+        </property>
+        <property name="geometry">
+         <rect>
+          <x>12</x>
+          <y>29</y>
+          <width>150</width>
+          <height>28</height>
+         </rect>
+        </property>
+        <property name="toolTip">
+         <string>Activate auto exposure compensation mode</string>
+        </property>
+        <property name="text">
+         <string>Turn On AE Mode </string>
+        </property>
+       </widget>
+       <widget class="QPushButton" name="b_exp_comp_increase">
+        <property name="enabled">
+         <bool>false</bool>
+        </property>
+        <property name="geometry">
+         <rect>
+          <x>182</x>
+          <y>29</y>
+          <width>75</width>
+          <height>28</height>
+         </rect>
+        </property>
+        <property name="toolTip">
+         <string>Increase exposure compensation</string>
+        </property>
+        <property name="text">
+         <string>+</string>
+        </property>
+       </widget>
+       <widget class="QPushButton" name="b_exp_comp_reset">
+        <property name="enabled">
+         <bool>false</bool>
+        </property>
+        <property name="geometry">
+         <rect>
+          <x>42</x>
+          <y>65</y>
+          <width>93</width>
+          <height>28</height>
+         </rect>
+        </property>
+        <property name="toolTip">
+         <string>Reset exposure compensation</string>
+        </property>
+        <property name="text">
+         <string>Reset</string>
+        </property>
+       </widget>
+       <widget class="QPushButton" name="b_exp_comp_decrease">
+        <property name="enabled">
+         <bool>false</bool>
+        </property>
+        <property name="geometry">
+         <rect>
+          <x>182</x>
+          <y>65</y>
+          <width>75</width>
+          <height>28</height>
+         </rect>
+        </property>
+        <property name="toolTip">
+         <string>Decrease exposure compensation</string>
+        </property>
+        <property name="text">
+         <string>-</string>
+        </property>
+       </widget>
       </widget>
       <widget class="QGroupBox" name="groupBox_9">
        <property name="geometry">
         <rect>
-         <x>12</x>
-         <y>38</y>
-         <width>252</width>
-         <height>103</height>
+         <x>10</x>
+         <y>28</y>
+         <width>273</width>
+         <height>106</height>
         </rect>
        </property>
        <property name="title">
         <string>Bright Mode</string>
        </property>
-       <layout class="QGridLayout" name="gridLayout_4">
-        <item row="1" column="1">
-         <widget class="QPushButton" name="b_bright_mode_reset">
-          <property name="enabled">
-           <bool>false</bool>
-          </property>
-          <property name="toolTip">
-           <string>Reset brightness setting</string>
-          </property>
-          <property name="text">
-           <string>Reset</string>
-          </property>
-         </widget>
-        </item>
-        <item row="0" column="1">
-         <widget class="QPushButton" name="b_activate_bright_mode">
-          <property name="enabled">
-           <bool>false</bool>
-          </property>
-          <property name="text">
-           <string>Turn On Bright Mode</string>
-          </property>
-         </widget>
-        </item>
-        <item row="0" column="2">
-         <widget class="QPushButton" name="b_bright_mode_increase">
-          <property name="enabled">
-           <bool>false</bool>
-          </property>
-          <property name="toolTip">
-           <string>Increase brightness setting</string>
-          </property>
-          <property name="text">
-           <string>+</string>
-          </property>
-         </widget>
-        </item>
-        <item row="1" column="2">
-         <widget class="QPushButton" name="b_bright_mode_decrease">
-          <property name="enabled">
-           <bool>false</bool>
-          </property>
-          <property name="toolTip">
-           <string>Decrease brightness setting</string>
-          </property>
-          <property name="text">
-           <string>-</string>
-          </property>
-         </widget>
-        </item>
-       </layout>
+       <widget class="QPushButton" name="b_bright_mode_reset">
+        <property name="enabled">
+         <bool>false</bool>
+        </property>
+        <property name="geometry">
+         <rect>
+          <x>42</x>
+          <y>65</y>
+          <width>93</width>
+          <height>28</height>
+         </rect>
+        </property>
+        <property name="toolTip">
+         <string>Reset brightness setting for bright mode</string>
+        </property>
+        <property name="text">
+         <string>Reset</string>
+        </property>
+       </widget>
+       <widget class="QPushButton" name="b_activate_bright_mode">
+        <property name="enabled">
+         <bool>false</bool>
+        </property>
+        <property name="geometry">
+         <rect>
+          <x>12</x>
+          <y>29</y>
+          <width>150</width>
+          <height>28</height>
+         </rect>
+        </property>
+        <property name="sizePolicy">
+         <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+          <horstretch>0</horstretch>
+          <verstretch>0</verstretch>
+         </sizepolicy>
+        </property>
+        <property name="minimumSize">
+         <size>
+          <width>0</width>
+          <height>0</height>
+         </size>
+        </property>
+        <property name="toolTip">
+         <string>Activate bright mode</string>
+        </property>
+        <property name="text">
+         <string>Turn On Bright Mode</string>
+        </property>
+       </widget>
+       <widget class="QPushButton" name="b_bright_mode_increase">
+        <property name="enabled">
+         <bool>false</bool>
+        </property>
+        <property name="geometry">
+         <rect>
+          <x>182</x>
+          <y>29</y>
+          <width>75</width>
+          <height>28</height>
+         </rect>
+        </property>
+        <property name="minimumSize">
+         <size>
+          <width>20</width>
+          <height>0</height>
+         </size>
+        </property>
+        <property name="toolTip">
+         <string>Increase brightness setting</string>
+        </property>
+        <property name="text">
+         <string>+</string>
+        </property>
+       </widget>
+       <widget class="QPushButton" name="b_bright_mode_decrease">
+        <property name="enabled">
+         <bool>false</bool>
+        </property>
+        <property name="geometry">
+         <rect>
+          <x>182</x>
+          <y>65</y>
+          <width>75</width>
+          <height>28</height>
+         </rect>
+        </property>
+        <property name="toolTip">
+         <string>Decrease brightness setting</string>
+        </property>
+        <property name="text">
+         <string>-</string>
+        </property>
+       </widget>
       </widget>
       <widget class="QPushButton" name="b_reset_camera">
        <property name="enabled">
@@ -1521,24 +1643,41 @@
        </property>
        <property name="geometry">
         <rect>
-         <x>304</x>
-         <y>70</y>
-         <width>93</width>
-         <height>28</height>
+         <x>86</x>
+         <y>262</y>
+         <width>125</width>
+         <height>50</height>
         </rect>
+       </property>
+       <property name="toolTip">
+        <string>Sends serial command to reset camera</string>
        </property>
        <property name="text">
         <string>Reset Camera</string>
+       </property>
+      </widget>
+      <widget class="QPushButton" name="b_reset_serial">
+       <property name="geometry">
+        <rect>
+         <x>86</x>
+         <y>334</y>
+         <width>125</width>
+         <height>50</height>
+        </rect>
+       </property>
+       <property name="text">
+        <string>Reconnect Serial
+Communication</string>
        </property>
       </widget>
      </widget>
      <widget class="QGroupBox" name="groupBox_11">
       <property name="geometry">
        <rect>
-        <x>410</x>
-        <y>62</y>
-        <width>247</width>
-        <height>145</height>
+        <x>380</x>
+        <y>434</y>
+        <width>279</width>
+        <height>119</height>
        </rect>
       </property>
       <property name="title">
@@ -1549,9 +1688,12 @@
         <rect>
          <x>14</x>
          <y>36</y>
-         <width>111</width>
+         <width>149</width>
          <height>16</height>
         </rect>
+       </property>
+       <property name="toolTip">
+        <string>Warning temperature at which the motors are disabled</string>
        </property>
        <property name="minimum">
         <number>50</number>
@@ -1569,7 +1711,7 @@
       <widget class="QLabel" name="label_11">
        <property name="geometry">
         <rect>
-         <x>192</x>
+         <x>230</x>
          <y>36</y>
          <width>35</width>
          <height>16</height>
@@ -1582,7 +1724,7 @@
       <widget class="QLabel" name="label_12">
        <property name="geometry">
         <rect>
-         <x>140</x>
+         <x>178</x>
          <y>32</y>
          <width>49</width>
          <height>23</height>
@@ -1609,7 +1751,7 @@
        <property name="geometry">
         <rect>
          <x>32</x>
-         <y>102</y>
+         <y>90</y>
          <width>75</width>
          <height>16</height>
         </rect>
@@ -1635,7 +1777,7 @@
        <property name="geometry">
         <rect>
          <x>114</x>
-         <y>100</y>
+         <y>88</y>
          <width>35</width>
          <height>19</height>
         </rect>
@@ -1645,26 +1787,107 @@
        </property>
       </widget>
      </widget>
+     <widget class="QGroupBox" name="groupBox_12">
+      <property name="geometry">
+       <rect>
+        <x>22</x>
+        <y>18</y>
+        <width>333</width>
+        <height>81</height>
+       </rect>
+      </property>
+      <property name="title">
+       <string>High Motor Current Warning</string>
+      </property>
+      <widget class="QSlider" name="s_high_motor_current">
+       <property name="geometry">
+        <rect>
+         <x>14</x>
+         <y>36</y>
+         <width>181</width>
+         <height>16</height>
+        </rect>
+       </property>
+       <property name="toolTip">
+        <string>Set current to alert user. This does not limit the current to the motors</string>
+       </property>
+       <property name="minimum">
+        <number>0</number>
+       </property>
+       <property name="maximum">
+        <number>99</number>
+       </property>
+       <property name="value">
+        <number>50</number>
+       </property>
+       <property name="orientation">
+        <enum>Qt::Horizontal</enum>
+       </property>
+       <property name="tickPosition">
+        <enum>QSlider::TicksBelow</enum>
+       </property>
+      </widget>
+      <widget class="QLabel" name="label_16">
+       <property name="geometry">
+        <rect>
+         <x>272</x>
+         <y>36</y>
+         <width>35</width>
+         <height>16</height>
+        </rect>
+       </property>
+       <property name="text">
+        <string>(A)</string>
+       </property>
+      </widget>
+      <widget class="QLabel" name="l_high_motor_current">
+       <property name="geometry">
+        <rect>
+         <x>220</x>
+         <y>32</y>
+         <width>49</width>
+         <height>23</height>
+        </rect>
+       </property>
+       <property name="text">
+        <string>N/A</string>
+       </property>
+      </widget>
+     </widget>
+     <widget class="QCheckBox" name="ir_comp">
+      <property name="geometry">
+       <rect>
+        <x>112</x>
+        <y>114</y>
+        <width>154</width>
+        <height>23</height>
+       </rect>
+      </property>
+      <property name="toolTip">
+       <string>Controls velocity to be constant, default: checked</string>
+      </property>
+      <property name="text">
+       <string>IR Compensation </string>
+      </property>
+      <property name="checked">
+       <bool>true</bool>
+      </property>
+     </widget>
+     <widget class="QPushButton" name="b_open_config_directory">
+      <property name="geometry">
+       <rect>
+        <x>96</x>
+        <y>494</y>
+        <width>183</width>
+        <height>55</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>Open Config File Directory</string>
+      </property>
+     </widget>
     </widget>
    </widget>
-  </widget>
-  <widget class="QMenuBar" name="menubar">
-   <property name="geometry">
-    <rect>
-     <x>0</x>
-     <y>0</y>
-     <width>794</width>
-     <height>18</height>
-    </rect>
-   </property>
-   <widget class="QMenu" name="menuSettings">
-    <property name="title">
-     <string>Settings</string>
-    </property>
-    <addaction name="actionOpen_Alert_Current"/>
-    <addaction name="actionAdd_Config_Files"/>
-   </widget>
-   <addaction name="menuSettings"/>
   </widget>
   <widget class="QStatusBar" name="statusbar"/>
   <action name="actionOpen_Alert_Current">
