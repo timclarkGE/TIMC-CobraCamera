@@ -1,3 +1,28 @@
+##############################################
+# Cobra Commander Motion Controller GUI      #
+# Controller : 006N8537                      #
+# Cobra Camera: 006N8780                     #
+# PLM Code Storage:  DOC-0014-1035           #
+# Code Revision: 2                           #
+##############################################
+# Revision Updates:
+#   2.0: Added IR compensation to prevent tool droop, serial comms with camera for brightness control, simulated light joystick,
+#        saved LED parameters, multi-threading
+
+# Author:   Timothy Clark
+# Email:    timoty.clark@ge.com
+# Date:     01/24/2023
+# Company:  GE Hitachi
+# Description
+#   - Graphical User Interface using PyQt5
+#   - Python 3.9, PyInstaller 5.7.0
+#   - Linear amplifiers to reduce EMI: Varedan LA-310T
+#   - Serial communication with camera using VirtualHere
+#   - Phidgets for hardware interface
+#
+# ###########################################################
+
+
 from Cobra_Commander_GUIr2 import Ui_MainWindow
 from PyQt5 import QtWidgets as qtw
 from PyQt5 import QtCore as qtc
@@ -116,6 +141,7 @@ class CameraControl(qtc.QObject):
         self.status_check_timer.start(2000)
         self.last_check = False
         self.conn_address = None
+        self.report_all_ip_addresses()
 
     # Virtual Here based method to start using a USB device connected to virtual here server
     def useDevice(self, address):
@@ -168,6 +194,18 @@ class CameraControl(qtc.QObject):
             self.serial_port.close()
         except serial.SerialException:
             pass
+
+    def report_all_ip_addresses(self):
+        ips = []
+        state = self.getClientState()
+        if state:
+            root = ET.fromstring(state[0])
+            if len(root) > 0:
+                connections = root.findall("./server/connection")
+                for child in connections:
+                    ips.append(child.get("ip"))
+
+        print(ips)
 
     # Slot: Starts a serial connection with an ip address string as input
     def start_serial(self, ip):
@@ -311,6 +349,8 @@ class GamepadControls(qtc.QObject):
     focus_state_updated = qtc.pyqtSignal()
     camera_power_state_updated = qtc.pyqtSignal()
 
+    motor_enabled_state_updated = qtc.pyqtSignal()
+
     message_created = qtc.pyqtSignal(str)
 
     # def __init__(self, index_speed_signal, scan_speed_signal, enabled_index, enabled_scan):
@@ -355,6 +395,8 @@ class GamepadControls(qtc.QObject):
         self.s_left_button = False
         self.s_last_left_button_click = 0
         self.light_state = 0  # 0: no light mode, 1: light vector, 2: light intensity
+
+        self.s_right_button = False
 
         self.s_last_zoom_click = time.time()
         self.s_last_focus_click = time.time()
@@ -426,6 +468,11 @@ class GamepadControls(qtc.QObject):
                     y_pcnfz_left = gamepad_stick_change(left_stick_last_y, left_stick_y)
                     x_pcnfz_right = gamepad_stick_change(right_stick_last_x, right_stick_x)
                     y_pcnfz_right = gamepad_stick_change(right_stick_last_y, right_stick_y)
+
+                    # Check if right joystick
+                    self.s_right_button = btn_state["RIGHT_THUMB"]
+                    if self.s_right_button and not self.btn_state_last["RIGHT_THUMB"]:
+                        self.motor_enabled_state_updated.emit()
 
                     # Check for camera zoom tele command
                     if btn_state["START"] != self.btn_state_last["START"]:
@@ -499,7 +546,6 @@ class GamepadControls(qtc.QObject):
                             self.message_created.emit("Entered Light Intensity Mode")
                             set_vibration(index, 30000, 30000)
                             self.deactivate_shoulder_and_rotation_axes()
-                            #TIMC
 
                     # If no light state active, set state variables for shoulder and rotation axes
                     if not self.light_state:
@@ -903,45 +949,56 @@ class CurrentFeedback(Phidget, qtc.QObject):
     current_updated = qtc.pyqtSignal(float)  # Each time the phidget has a new data point, this signal is emitted.
     trans_con = 0.25  # A/V transconductance for converting voltage to current
     high_current_warning = 0.0  # A
+    fault_current = 0.7  # A
 
-    def __init__(self, phidget_type, sn, hub_port, ch, over_curr_signal, under_powered_signal, enabled):
+    def __init__(self, phidget_type, sn, hub_port, ch, over_curr_warning_signal, under_powered_signal, fault_curr_signal, enabled):
         super(CurrentFeedback, self).__init__(phidget_type, sn, hub_port, ch, self.onUpdate)
         qtc.QObject.__init__(self)
-        self.high_current_state = False
-        self.over_curr_signal = over_curr_signal
+        self.warning_current_state = False  # Current is greater than warning current
+        self.fault_current_state = False  # Current is greater than fault current
+        self.over_curr_warning_signal = over_curr_warning_signal
         self.under_powered_signal = under_powered_signal
+        self.fault_curr_signal = fault_curr_signal
         self.enabled = enabled
         self.enabled.connect(lambda state: self.update_enabled_state(state))
         self.axis_enabled = False
 
     def onUpdate(self, trash, voltage):
         current = CurrentFeedback.trans_con * voltage
-        # The voltage will be greater than 10V or less than -10V when the amplifier is not enabled and current is 0A
+        # Send out zero current reported if axis is not enabled
         if not self.axis_enabled:
             self.current_updated.emit(0)
-            if self.high_current_state:
-                self.over_curr_signal.emit(False)
-                self.high_current_state = False
+            if self.warning_current_state:
+                self.over_curr_warning_signal.emit(False)
+                self.warning_current_state = False
+
+            if self.fault_current_state:
+                self.fault_curr_signal.emit(False)
+                self.fault_current_state = False
         else:
             self.current_updated.emit(current)
 
             # If the current is higher than the set point
             if abs(current) > self.high_current_warning:
                 # And the state variable has not yet been set
-                if not self.high_current_state:
-                    self.over_curr_signal.emit(True)
-                    self.high_current_state = True
+                if not self.warning_current_state:
+                    self.over_curr_warning_signal.emit(True)
+                    self.warning_current_state = True
             # Current is less than set point, change state to normal current if not yet set state variable
-            elif self.high_current_state:
-                self.over_curr_signal.emit(False)
-                self.high_current_state = False
+            elif self.warning_current_state:
+                self.over_curr_warning_signal.emit(False)
+                self.warning_current_state = False
 
-    # Slot: Update the high current warning from the main GUI
-    def update_high_current(self, high_current):
-        # High current setting should be between 1 and 0A, but comes in as 0 to 99
-        high_current = high_current / 100
-        if 0 <= high_current < 1:
-            CurrentFeedback.high_current_warning = high_current
+            # If the current is higher than fault current
+            if abs(current) > self.fault_current:
+                # And the state variable has not yet been set
+                if not self.fault_current_state:
+                    self.fault_curr_signal.emit(True)
+                    self.fault_current_state = True
+            # Current is less than fault point
+            elif self.fault_current_state:
+                self.fault_curr_signal.emit(False)
+                self.fault_current_state = False
 
     # Change the variable to start/stop the broadcasting of zero current
     def update_enabled_state(self, state):
@@ -1746,7 +1803,14 @@ class LightJoystickWidget(qtw.QWidget):
 # Pull in GUI information and pair with code.
 class UserWindow(qtw.QMainWindow, Ui_MainWindow):
     count = 0
-    over_current = qtc.pyqtSignal(bool)
+    over_current_warning_1A = qtc.pyqtSignal(bool)
+    over_current_warning_1B = qtc.pyqtSignal(bool)
+    over_current_warning_2A = qtc.pyqtSignal(bool)
+    over_current_warning_2B = qtc.pyqtSignal(bool)
+    over_current_fault_1A = qtc.pyqtSignal(bool)
+    over_current_fault_1B = qtc.pyqtSignal(bool)
+    over_current_fault_2A = qtc.pyqtSignal(bool)
+    over_current_fault_2B = qtc.pyqtSignal(bool)
     motors_enabled = qtc.pyqtSignal(bool)
     under_powered = qtc.pyqtSignal()
     focused_manual = qtc.pyqtSignal()
@@ -1813,29 +1877,47 @@ class UserWindow(qtw.QMainWindow, Ui_MainWindow):
         self.b_enable.pressed.connect(lambda: self.enable_motor.enable_motors())
 
         # Connect the Phidgets which sense motor current
-        self.current_non_channel_1A = CurrentFeedback("VoltageInput", "HUB2", 4, 0, self.over_current, self.under_powered,
-                                                      self.enable_motor.drive_enabled)
-        self.current_channel_side_1B = CurrentFeedback("VoltageInput", "HUB2", 5, 0, self.over_current, self.under_powered,
-                                                       self.enable_motor.drive_enabled)
-        self.current_pan_2A = CurrentFeedback("VoltageInput", "HUB2", 3, 0, self.over_current, self.under_powered,
-                                              self.enable_motor.drive_enabled)
-        self.current_tilt_2B = CurrentFeedback("VoltageInput", "HUB2", 2, 0, self.over_current, self.under_powered,
-                                               self.enable_motor.drive_enabled)
-        self.under_powered.connect(lambda: self.statusbar.showMessage("Motor(s) Underpowered Warning", 3000))
+        self.current_non_channel_1A = CurrentFeedback("VoltageInput", "HUB2", 4, 0, self.over_current_warning_1A, self.under_powered,
+                                                      self.over_current_fault_1A, self.enable_motor.drive_enabled)
+        self.current_channel_side_1B = CurrentFeedback("VoltageInput", "HUB2", 5, 0, self.over_current_warning_1B, self.under_powered,
+                                                       self.over_current_fault_1B, self.enable_motor.drive_enabled)
+        self.current_pan_2A = CurrentFeedback("VoltageInput", "HUB2", 3, 0, self.over_current_warning_2A, self.under_powered,
+                                              self.over_current_fault_2A, self.enable_motor.drive_enabled)
+        self.current_tilt_2B = CurrentFeedback("VoltageInput", "HUB2", 2, 0, self.over_current_warning_2B, self.under_powered,
+                                               self.over_current_fault_2B, self.enable_motor.drive_enabled)
+        # self.under_powered.connect(lambda: self.statusbar.showMessage("Motor(s) Underpowered Warning", 3000))
 
         # Setup timers that will blink the current labels when there is high current
         self.ch_1A_blink_current_warning = qtc.QTimer()
         self.ch_1A_blink_current_warning.timeout.connect(lambda val=("1A", "N/A"): self.blink_current_label(val[0], val[1]))
-        self.current_non_channel_1A.over_curr_signal.connect(lambda val: self.blink_current_label("1A", val))
+        self.current_non_channel_1A.over_curr_warning_signal.connect(lambda val: self.blink_current_label("1A", val))
         self.ch_1B_blink_current_warning = qtc.QTimer()
         self.ch_1B_blink_current_warning.timeout.connect(lambda val=("1B", "N/A"): self.blink_current_label(val[0], val[1]))
-        self.current_channel_side_1B.over_curr_signal.connect(lambda val: self.blink_current_label("1B", val))
+        self.current_channel_side_1B.over_curr_warning_signal.connect(lambda val: self.blink_current_label("1B", val))
         self.ch_2A_blink_current_warning = qtc.QTimer()
         self.ch_2A_blink_current_warning.timeout.connect(lambda val=("2A", "N/A"): self.blink_current_label(val[0], val[1]))
-        self.current_pan_2A.over_curr_signal.connect(lambda val: self.blink_current_label("2A", val))
+        self.current_pan_2A.over_curr_warning_signal.connect(lambda val: self.blink_current_label("2A", val))
         self.ch_2B_blink_current_warning = qtc.QTimer()
         self.ch_2B_blink_current_warning.timeout.connect(lambda val=("2B", "N/A"): self.blink_current_label(val[0], val[1]))
-        self.current_tilt_2B.over_curr_signal.connect(lambda val: self.blink_current_label("2B", val))
+        self.current_tilt_2B.over_curr_warning_signal.connect(lambda val: self.blink_current_label("2B", val))
+
+        # Timers for extended over-current situation in which the software automatically will disabled the motors
+        self.fault_current_time = 1000  # ms of time before motors are disabled
+        self.cool_down_time = 5000  # ms of time before user can enable axes again
+        self.cool_down_timer = qtc.QTimer()
+        self.cool_down_timer.timeout.connect(lambda: self.b_enable.setEnabled(True))
+        self.ch_1A_fault_current_timer = qtc.QTimer()
+        self.ch_1A_fault_current_timer.timeout.connect(self.disable_motors_from_current_fault)
+        self.ch_1B_fault_current_timer = qtc.QTimer()
+        self.ch_1B_fault_current_timer.timeout.connect(self.disable_motors_from_current_fault)
+        self.ch_2A_fault_current_timer = qtc.QTimer()
+        self.ch_2A_fault_current_timer.timeout.connect(self.disable_motors_from_current_fault)
+        self.ch_2B_fault_current_timer = qtc.QTimer()
+        self.ch_2B_fault_current_timer.timeout.connect(self.disable_motors_from_current_fault)
+        self.current_non_channel_1A.fault_curr_signal.connect(lambda val: self.process_fault_current("1A", val))
+        self.current_channel_side_1B.fault_curr_signal.connect(lambda val: self.process_fault_current("1B", val))
+        self.current_pan_2A.fault_curr_signal.connect(lambda val: self.process_fault_current("2A", val))
+        self.current_tilt_2B.fault_curr_signal.connect(lambda val: self.process_fault_current("2B", val))
 
         # Connect signals for updated motor current to the GUI labels
         self.current_non_channel_1A.current_updated.connect(lambda current: self.update_gui_current(current, "1A"))
@@ -1933,9 +2015,13 @@ class UserWindow(qtw.QMainWindow, Ui_MainWindow):
         self.gamepad_control.focus_stopped.connect(self.b_far.released)
         self.gamepad_control.focus_state_updated.connect(self.process_manual_select)
         self.gamepad_control.camera_power_state_updated.connect(self.swCameraPWR.toggle)
+        self.gamepad_control.motor_enabled_state_updated.connect(self.b_enable.click)
 
         # When there is an over current situation, rumble the gamepad
-        self.over_current.connect(self.gamepad_control.rumble_for_over_current)
+        self.over_current_warning_1A.connect(self.gamepad_control.rumble_for_over_current)
+        self.over_current_warning_1B.connect(self.gamepad_control.rumble_for_over_current)
+        self.over_current_warning_2A.connect(self.gamepad_control.rumble_for_over_current)
+        self.over_current_warning_2B.connect(self.gamepad_control.rumble_for_over_current)
         self.gamepad_control.message_created.connect(lambda msg: self.statusbar.showMessage(msg, 3000))
 
         # Initialize the motors with their v_cmd and current feedback
@@ -1995,7 +2081,6 @@ class UserWindow(qtw.QMainWindow, Ui_MainWindow):
 
         self.b_open_config_directory.clicked.connect(self.CM.open_config_files_directory)
 
-
     def closeEvent(self, trash):
         self.camera_control.stop_serial()
 
@@ -2014,7 +2099,6 @@ class UserWindow(qtw.QMainWindow, Ui_MainWindow):
         multiple_users.setText(message)
         multiple_users.exec_()
         multiple_users.raise_()
-
 
     def validate_camera_power(self):
         rv = self.swCameraPWR.grabState()
@@ -2063,9 +2147,6 @@ class UserWindow(qtw.QMainWindow, Ui_MainWindow):
                 self.offline = False
                 self.init_serial_connection()
 
-
-
-
         # All Phidgets are not attached, display error code
         else:
             self.statusbar.showMessage(
@@ -2082,22 +2163,27 @@ class UserWindow(qtw.QMainWindow, Ui_MainWindow):
             self.offline = True
 
     def init_serial_connection(self):
-        # Get IP address of a phidget channel on SBC.
-        usb_to_serial_ip_address = self.swCameraPWR.getServerPeerName().split(":")[0]
-        # Emit the signal which tells the serial thread to start a serial connection
-        self.start_serial_requested.emit(usb_to_serial_ip_address)
-        # If the default hostname is used for the SBC, multiple SBC's will not be able to be on the network at the same time.
-        if "phidgetsbc" in self.swCameraPWR.getServerHostname():
-            webbrowser.open_new(usb_to_serial_ip_address)
-            rename_hostname_alert = qtw.QMessageBox()
-            rename_hostname_alert.setWindowTitle("Warning: SBC Hostname is Default")
-            message = "Open web browser if not already with url:\n" + usb_to_serial_ip_address + "/cgi-bin/status-system.sh\n"
-            message += "Username = admin\n"
-            message += "Password = Isi99word\n"
-            message += "Click on \"System\" and rename the Hostname to the serial number\n"
-            rename_hostname_alert.setText(message)
-            rename_hostname_alert.exec_()
-            rename_hostname_alert.raise_()
+        try:
+            # Get IP address of a phidget channel on SBC.
+            usb_to_serial_ip_address = self.swCameraPWR.getServerPeerName().split(":")[0]
+            # Emit the signal which tells the serial thread to start a serial connection
+            self.start_serial_requested.emit(usb_to_serial_ip_address)
+            # If the default hostname is used for the SBC, multiple SBC's will not be able to be on the network at the same time.
+            if "phidgetsbc" in self.swCameraPWR.getServerHostname():
+                webbrowser.open_new(usb_to_serial_ip_address)
+                rename_hostname_alert = qtw.QMessageBox()
+                rename_hostname_alert.setWindowTitle("Warning: SBC Hostname is Default")
+                message = "Open web browser if not already with url:\n" + usb_to_serial_ip_address + "/cgi-bin/status-system.sh\n"
+                message += "Username = admin\n"
+                message += "Password = Isi99word\n"
+                message += "Click on \"System\" and rename the Hostname to the serial number\n"
+                rename_hostname_alert.setText(message)
+                rename_hostname_alert.exec_()
+                rename_hostname_alert.raise_()
+
+        except:
+            msg = "Error Phidgets must be attached before serial communicaiton"
+            self.statusbar.showMessage(msg, 3000)
 
     # Called when user presses and holds the heartbeat button to identify Cobra Commander
     def myocardial_infarction(self):
@@ -2298,6 +2384,38 @@ class UserWindow(qtw.QMainWindow, Ui_MainWindow):
                 self.ch_2B_blink_current_warning.stop()
                 self.l_current2B.setStyleSheet("background-color : light grey")
 
+    # When there is a fault over current situation, start a timer to determine if motors need to be disabled #TIMC
+    def process_fault_current(self, ch, state):
+        # Check the channel requesting the action
+        if ch == "1A":
+            if state:
+                self.ch_1A_fault_current_timer.start(self.fault_current_time)
+            else:
+                self.ch_1A_fault_current_timer.stop()
+
+        elif ch == "1B":
+            if state:
+                self.ch_1B_fault_current_timer.start(self.fault_current_time)
+            else:
+                self.ch_1B_fault_current_timer.stop()
+        elif ch == "2A":
+            if state:
+                self.ch_2A_fault_current_timer.start(self.fault_current_time)
+            else:
+                self.ch_2A_fault_current_timer.stop()
+
+        elif ch == "2B":
+            if state:
+                self.ch_2B_fault_current_timer.start(self.fault_current_time)
+            else:
+                self.ch_2B_fault_current_timer.stop()
+
+    def disable_motors_from_current_fault(self):
+        self.enable_motor.disable_motors()
+        msg = "Motors disabled from over-current fault, 5 second cool down timer initiated"
+        self.statusbar.showMessage(msg, self.cool_down_time)
+        self.b_enable.setEnabled(False)
+        self.cool_down_timer.start(self.cool_down_time)
 
     def blink_drive1_temperature(self):
         if int(time.time()) % 2:

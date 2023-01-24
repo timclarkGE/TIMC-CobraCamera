@@ -16,6 +16,10 @@
   <property name="windowTitle">
    <string>Cobra Commander GUI r2</string>
   </property>
+  <property name="windowIcon">
+   <iconset>
+    <normaloff>Cobra_Commander_Support_Files/cobra_commander_icon.ico</normaloff>Cobra_Commander_Support_Files/cobra_commander_icon.ico</iconset>
+  </property>
   <widget class="QWidget" name="centralwidget">
    <property name="sizePolicy">
     <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
@@ -95,7 +99,7 @@
       <widget class="QLabel" name="l_cabinet_power">
        <property name="geometry">
         <rect>
-         <x>212</x>
+         <x>202</x>
          <y>74</y>
          <width>34</width>
          <height>24</height>
