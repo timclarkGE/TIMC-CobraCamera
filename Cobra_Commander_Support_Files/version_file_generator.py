@@ -2,7 +2,7 @@ import pyinstaller_versionfile
 
 pyinstaller_versionfile.create_versionfile(
     output_file="cc_versionfile.txt",
-    version="2.0.0.0",
+    version="2.0.0.2",
     # company_name="GE-Hitachi",
     file_description="Cobra Commander Graphical User Interface",
     # internal_name="Simple App",

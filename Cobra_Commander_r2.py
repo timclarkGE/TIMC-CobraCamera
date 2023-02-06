@@ -205,6 +205,7 @@ class CameraControl(qtc.QObject):
                 for child in connections:
                     ips.append(child.get("ip"))
 
+        # Print the ip addresses to the command window for troubleshooting purposes
         print(ips)
 
     # Slot: Starts a serial connection with an ip address string as input
@@ -262,7 +263,8 @@ class CameraControl(qtc.QObject):
                                             # Check if the device now reports state 3 which denotes a successful attempt to connect
                                             if child.get("serverSerial") == serial_id and child.get("state") == '3':
                                                 self.port_name = child.get("comPortName")
-                                                self.message_created.emit("Virtual Here connected to serial adapter at: " + self.port_name)
+                                                if self.port_name:
+                                                    self.message_created.emit("Virtual Here connected to serial adapter at: " + self.port_name)
                         # Device state 3 is for connection already existing
                         if device_state == '3':
                             self.port_name = child.get("comPortName")
@@ -949,7 +951,7 @@ class CurrentFeedback(Phidget, qtc.QObject):
     current_updated = qtc.pyqtSignal(float)  # Each time the phidget has a new data point, this signal is emitted.
     trans_con = 0.25  # A/V transconductance for converting voltage to current
     high_current_warning = 0.0  # A
-    fault_current = 0.7  # A
+    fault_current = 0.6  # A
 
     def __init__(self, phidget_type, sn, hub_port, ch, over_curr_warning_signal, under_powered_signal, fault_curr_signal, enabled):
         super(CurrentFeedback, self).__init__(phidget_type, sn, hub_port, ch, self.onUpdate)
@@ -1247,23 +1249,28 @@ class CameraLighting(qtc.QObject):
         else:
             self.enableButton.setStyleSheet("background-color : red")
 
-    # When user clicks on "Set Minimum" the current_tilt position of the LED control sliders will be used.
+    # When user clicks on "Set Minimum" the current_tilt position of the LED control sliders will be used, and the configuration will be saved
     def setMinimumBrightnessFromSlider(self):
         count = 0
-        a = []
+        # a = []
         for i in self.LEDs:
             value = i.slider.value()
             i.setMinimumBrightness(value)
             self.edits[count].setText(str(value))
             i.updateLED()
-            a.append(str(value))
+            # a.append(str(value))
             count += 1
-        self.updated_minimum_brightness.emit(a[0], a[1], a[2], a[3])
+        # self.updated_minimum_brightness.emit(a[0], a[1], a[2], a[3])
 
     # Invoked when user applies values found in edit boxes to set the minimum brightness for LED's
     def applyLineEditMinimumBrightness(self):
+        a = []
         for i in range(len(self.edits)):
             self.LEDs[i].setMinimumBrightness(int(self.edits[i].text()))
+            a.append(self.edits[i].text())
+
+        # Send the signal to update the configuration file
+        self.updated_minimum_brightness.emit(a[0], a[1], a[2], a[3])
 
     # Update all LED's such that their control input slider reverts back to default values
     def resetLEDs(self):
@@ -2077,7 +2084,7 @@ class UserWindow(qtw.QMainWindow, Ui_MainWindow):
 
         # Connect movements of the temperature slider to update the temperature setpoint which causes an error
         self.s_trip_temp.valueChanged.connect(lambda val: self.temp_drive1.update_warning_temperature(val))
-        self.s_trip_temp.setValue(130)  # Set default value to 130F
+        self.s_trip_temp.setValue(130)  # Set default value to 130F, with ambient 71F, Drive 1:100F and Drive2:106F
 
         self.b_open_config_directory.clicked.connect(self.CM.open_config_files_directory)
 
@@ -2482,12 +2489,10 @@ class UserWindow(qtw.QMainWindow, Ui_MainWindow):
     def jog_extend(self, speed):
         self.motor_channel_side.jog_cw(speed)
         self.motor_non_channel.jog_ccw(speed)
-        print(speed)
 
     def jog_retract(self, speed):
         self.motor_channel_side.jog_ccw(speed)
         self.motor_non_channel.jog_cw(speed)
-        print(speed)
 
     def stop_multi_jog(self):
         self.motor_channel_side.stop_jog()
